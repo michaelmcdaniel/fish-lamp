@@ -1,0 +1,6 @@
+/build/
+/test-build/
+/data/
+**/config.json
+**/config.bak
+**/config.tmp

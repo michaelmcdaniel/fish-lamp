@@ -1,0 +1,24 @@
+param([string]$ArduinoJson = "$env:USERPROFILE\OneDrive\Documents\Arduino\libraries\ArduinoJson\src")
+$ErrorActionPreference = 'Stop'
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+if (-not $vs) { throw 'Visual Studio C++ tools are required for host tests.' }
+if (-not (Test-Path -LiteralPath "$ArduinoJson\ArduinoJson.h")) { throw 'Pass -ArduinoJson with the installed library src directory.' }
+$root = $PSScriptRoot
+$out = Join-Path $root 'test-build'
+New-Item -ItemType Directory -Force -Path $out | Out-Null
+$runner = Join-Path $out 'run.cmd'
+@"
+@echo off
+call "$vs\VC\Auxiliary\Build\vcvars64.bat" >nul
+if errorlevel 1 exit /b 1
+cl /nologo /std:c++17 /EHsc /W4 /I"$root\tests\fakes" /I"$root\src" /I"$ArduinoJson" "$root\tests\test_main.cpp" "$root\src\ClockMath.cpp" "$root\src\SolarSchedule.cpp" "$root\src\ScheduleController.cpp" "$root\src\Config.cpp" "$root\src\TimeService.cpp" "$root\src\LightingController.cpp" /Fe:tests.exe
+if errorlevel 1 exit /b 1
+tests.exe
+exit /b %errorlevel%
+"@ | Set-Content -LiteralPath $runner -Encoding ascii
+Push-Location $out
+try {
+  & $env:ComSpec /d /c $runner
+  if ($LASTEXITCODE -ne 0) { throw "Host tests failed with exit code $LASTEXITCODE" }
+} finally { Pop-Location }

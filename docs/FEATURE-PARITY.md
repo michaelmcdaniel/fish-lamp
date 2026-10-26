@@ -16,10 +16,11 @@ desktop checks, not hardware acceptance.
 | DS3231 | Implemented read/validate/holdover/recovery and browser-time initialization | On-device bus timeout and readback measurements pending |
 | NTP | Deferred | Must be optional, bounded, and update RTC consistently |
 | LittleFS / settings | Implemented validation, backup fallback, migration and verified temp/rename save | Actual power-cut recovery tests pending; format only on explicit setup submit |
-| Water DS18B20 GPIO 26 | Deferred | Async conversion, CRC, reconnect and last-valid/stale reporting required |
-| Ambient GPIO 27 | Deferred | Preserve approximately 0–100% semantics |
-| Internal CPU temperature | Deferred | Use internal ADC channel, separate averaged reading |
-| Status LED | Deferred | No application status indication yet |
+| Water DS18B20 GPIO 26 | Async 750 ms conversion, minute sampling, CRC/family/range checks, last-valid snapshot, mock switch | One externally powered sensor; physical fault/reconnection tests pending |
+| Ambient GPIO 27 | 12-bit ADC normalized to 0–100%, mock switch | Physical ADC validation pending |
+| Internal CPU temperature | Supported core internal ADC API, eight-sample average, mock switch | Separate Celsius reading; physical validation pending |
+| Status LED | On when config/time usable; mock switch | Physical indication pending |
+| Device selection | Individual real/mock compile-time switches; external-device bench profile | Mock outputs use bounded debug queue; mock RTC resets at boot |
 | Wi-Fi station | Implemented nonblocking connection/retry states | Actual outage/reconnection timing tests pending |
 | Protected provisioning AP | Implemented for missing/invalid config, local mobile page, test/save/restart | Private per-build key; physical AP and restart tests pending |
 | Setup network discovery | Bounded pre-AP scan; editable SSID combo; strongest 24 distinct networks cached | Manual hidden-network entry; physical scanning pending |
@@ -55,5 +56,5 @@ AP serving remains unverified. Normal-operation browser compatibility is deferre
 ## Next vertical slice
 
 Validate first-boot AP setup, RTC initialization, saving/restart and power
-interruption on hardware. Then add asynchronous sensors, the normal-operation
+interruption and real sensor/output adapters on hardware. Then add the normal-operation
 API/UI and configuration maintenance, and telemetry. Build and fault-test each slice.

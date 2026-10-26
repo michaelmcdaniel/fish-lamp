@@ -1,5 +1,7 @@
 #include "SetupService.h"
 #include "SetupPage.h"
+#include "Devices.h"
+#include "MockDebug.h"
 #include <Arduino.h>
 #include <algorithm>
 #include <cstdio>
@@ -13,6 +15,7 @@ static_assert(sizeof(FISH_LAMP_SETUP_PASSWORD) >= 9 && sizeof(FISH_LAMP_SETUP_PA
               "Setup AP password must contain 8 to 63 characters.");
 
 void SetupService::begin(const ConfigManager& settings) {
+  if(!devices::wifi) { state_=State::Disabled; mockdebug::log("mock WiFi: disconnected; setup unavailable\r\n"); return; }
   WiFi.setTimeout(1000);
   if (!settings.valid()) {
     WiFi.end(); networks_.begin(millis()); state_=State::Scanning;
@@ -80,12 +83,15 @@ void SetupService::handle(uint32_t now, ConfigManager& settings, TimeService& cl
       reply(202,"text/plain","Settings received. The setup network will disconnect while the lamp tests home Wi-Fi (up to 20 seconds). On success it saves and restarts. If FishLamp-Setup returns, reconnect and reload this page for the error; settings were not confirmed saved.",now);
     } else {
       commit(now,settings,clock);
-      if (state_==State::Restart) reply(200,"text/plain","Settings saved and clock verified. The lamp will restart in a few seconds. Offline lighting is ready.",millis());
+      if (state_==State::Restart) reply(200,"text/plain",devices::rtc ?
+        "Settings saved and clock verified. The lamp will restart in a few seconds. Offline lighting is ready." :
+        "Settings saved. Mock RTC accepted the time in RAM only; restart restores the mock starting time. The lamp will restart in a few seconds.",millis());
       else reply(503,"text/plain",lastError_,millis());
     }
   } else reply(404,"text/plain","Not found. Open http://192.168.4.1/",now);
 }
 void SetupService::tick(uint32_t now, ConfigManager& settings, TimeService& clock) {
+  if(!devices::wifi) return;
   if(state_==State::Scanning) {
     if(!networks_.tick(now)) return;
     state_=State::StartAP;

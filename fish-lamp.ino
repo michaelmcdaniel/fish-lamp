@@ -6,6 +6,8 @@
 #include "src/ScheduleController.h"
 #include "src/Diagnostics.h"
 #include "src/SetupService.h"
+#include "src/SensorManager.h"
+#include "src/StatusLed.h"
 
 LightingController lighting;
 TimeService clockService;
@@ -13,6 +15,8 @@ ConfigManager settings;
 ScheduleController schedule;
 Diagnostics diagnostics;
 SetupService networking;
+SensorManager sensors;
+StatusLed statusLed;
 
 void setup() {
   lighting.begin();
@@ -20,6 +24,8 @@ void setup() {
   rp2040.wdt_begin(8000);
   settings.begin();
   clockService.begin();
+  sensors.begin();
+  statusLed.begin();
   diagnostics.begin();
   networking.begin(settings);
 }
@@ -28,6 +34,8 @@ void loop() {
   const uint32_t started = micros();
   const uint32_t now = millis();
   clockService.tick(now);
+  sensors.tick(now);
+  statusLed.apply(settings.valid() && clockService.valid());
   if (settings.valid() && clockService.valid() && !networking.restarting()) {
     schedule.tick(clockService.utc(), now, settings.config);
     lighting.apply(schedule.forceOff ? nullptr : schedule.dayOn ?
@@ -37,6 +45,6 @@ void loop() {
   }
   // Only essential control progress feeds the hardware watchdog.
   rp2040.wdt_reset();
-  diagnostics.tick(now, micros() - started, settings, clockService, schedule, lighting, int(networking.state()));
+  diagnostics.tick(now, micros() - started, settings, clockService, schedule, lighting, int(networking.state()), sensors);
   networking.tick(millis(), settings, clockService);
 }

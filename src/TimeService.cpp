@@ -1,9 +1,17 @@
 #include "TimeService.h"
 #include "ClockMath.h"
+#include "Devices.h"
+#include "MockDebug.h"
 #include <Arduino.h>
 #include <Wire.h>
 
 void TimeService::begin() {
+  if(!devices::rtc) {
+    seconds_=devices::mockRtcUtc; valid_=true; healthy_=false;
+    advancedMs_=millis(); first_=false;
+    mockdebug::log("mock RTC: boot UTC=%lld\r\n",static_cast<long long>(seconds_));
+    return;
+  }
   Wire.setSDA(16);
   Wire.setSCL(17);
   Wire.begin();
@@ -26,6 +34,11 @@ bool TimeService::read(int64_t& value) {
 }
 bool TimeService::setUtc(int64_t utc, uint32_t now) {
   if (utc < clockmath::midnight({2000,1,1}) || utc >= clockmath::midnight({2100,1,1})) return false;
+  if(!devices::rtc) {
+    seconds_=utc; advancedMs_=now; valid_=true; healthy_=false; first_=false;
+    mockdebug::log("mock RTC: set UTC=%lld (RAM only)\r\n",static_cast<long long>(utc));
+    return true;
+  }
   auto date = clockmath::dateAt(utc);
   auto bcd = [](int value) { return uint8_t((value/10)*16 + value%10); };
   uint8_t status;
@@ -51,6 +64,7 @@ void TimeService::tick(uint32_t now) {
   uint32_t elapsed = (now - advancedMs_) / 1000;
   if (valid_) seconds_ += elapsed;
   advancedMs_ += elapsed * 1000;
+  if(!devices::rtc) return;
   if (!first_ && uint32_t(now - attemptedMs_) < 60000) return;
   first_ = false;
   attemptedMs_ = now;

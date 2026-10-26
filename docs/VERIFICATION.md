@@ -1,5 +1,31 @@
 # Verification record — 2026-10-26
 
+## Device switches and mock adapters — executed
+
+* Default real-device build passed with unchanged build.ps1/FQBN: **409,952 bytes
+  flash**, **123,528 bytes static RAM**, 400,760 bytes remaining. OneWire 2.3.8
+  installed through Arduino Library Manager for the real DS18B20 adapter.
+* All-mock firmware compiled with BENCH=1, CPU_TEMP=0, STATUS_LED=0, WIFI=0:
+  **369,344 bytes flash**, **122,452 bytes static RAM**. Same board/flash layout;
+  temporary compiler flags and output under ignored test-build/mock-firmware.
+* Usable bench profile (BENCH=1, Wi-Fi/internal CPU/status LED real) also passed:
+  **406,216 bytes flash**, **123,464 bytes static RAM**. Deployable artifact:
+  `test-build/bench-firmware/fish-lamp.ino.uf2`. The normal `build` output remains
+  the real-device profile; source defaults remain real hardware.
+* **218,122 existing host assertions passed**, plus dedicated real and mock
+  device-adapter executables. No host compiler warnings. Tests exercise no GPIO,
+  OneWire or I2C operations for disabled devices; fixed mock values; RTC writes
+  and progression in RAM; applied LED brightness; repeated-output suppression;
+  bounded debug queue overflow; DS18B20 absent/reconnected, CRC failures,
+  parasite-power rejection, incomplete conversions and millis wrap; invalid ADC
+  and CPU readings retaining last-valid snapshots.
+* Firmware warnings remain in existing NeoPixel and core WiFi dependencies.
+  No firmware-source warnings. No firmware uploaded or physical tests performed.
+* Hardware follow-up: boot bench profile on a bare Pico 2 W, provision via AP,
+  inspect mock Serial messages, then enable each attached gadget individually.
+  Measure OneWire/ADC execution durations and watchdog margin; verify sensor
+  pull-up/external power, temperatures, GPIO polarity and onboard LED indication.
+
 ## Setup network combo increment — executed
 
 * Unchanged build.ps1 passed with Arduino-Pico 6.0.0: **407,616 bytes flash

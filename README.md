@@ -9,8 +9,8 @@ been established. See [feature parity](docs/FEATURE-PARITY.md) and
 ## Build and tests
 
 Verified dependencies: Arduino-Pico **6.0.0**, ArduinoJson **7.4.3**, and
-Adafruit NeoPixel **1.15.2**. Arduino CLI can install missing libraries with
-`arduino-cli lib install "ArduinoJson@7.4.3" "Adafruit NeoPixel@1.15.2"`.
+Adafruit NeoPixel **1.15.2**, and OneWire **2.3.8**. Arduino CLI can install missing libraries with
+`arduino-cli lib install "ArduinoJson@7.4.3" "Adafruit NeoPixel@1.15.2" "OneWire@2.3.8"`.
 The existing `build.ps1` and its board/flash selection are unchanged.
 
 The private setup key has already been generated in this workspace. On a fresh
@@ -38,6 +38,49 @@ with the library's `src` path if it is not in the default Documents location.
 Generated firmware and native test binaries stay in ignored build directories.
 
 ## Configure on first boot
+
+### Hardware switches / bench deployment
+
+Edit **src/Devices.h**, then rebuild and upload. `FISH_LAMP_BENCH=1` mocks all
+external gadgets while retaining real Wi-Fi, internal temperature and the onboard
+status LED. Its default is 0 (real hardware). Each individual switch can override
+that profile: **1 = real, 0 = mock**. These are firmware settings, not saved JSON.
+
+| Switch | Device / behavior when mocked |
+|---|---|
+| `FISH_LAMP_STRIP` | GPIO 7 strip: accepts colors; logs changed pixel index and applied RGB after brightness |
+| `FISH_LAMP_GROW` | GPIO 8: accepts switching requests; logs changes |
+| `FISH_LAMP_RTC` | DS3231: starts at `mockRtcUtc`, advances in RAM; time writes accepted and logged |
+| `FISH_LAMP_WATER` | DS18B20: `mockWaterF`, initially 77 °F |
+| `FISH_LAMP_AMBIENT` | Photoresistor: `mockAmbientPercent`, initially 50% |
+| `FISH_LAMP_CPU_TEMP` | Internal ADC temperature: `mockCpuC`, initially 30 °C |
+| `FISH_LAMP_STATUS_LED` | Onboard LED: logs on/off changes |
+| `FISH_LAMP_WIFI` | Reports disabled/disconnected; no application scans, AP or station connections |
+
+Mock RTC defaults to 2026-01-01 12:00 UTC at **every restart**, including after
+setup. Change `mockRtcUtc` to exercise a particular schedule date/time. A setup
+time write affects RAM only; mock time is not a replacement for a battery RTC.
+RTC health stays false and diagnostics identify the mocked devices explicitly.
+Keep Wi-Fi enabled to configure a blank Pico. With Wi-Fi mocked, valid settings
+must already exist in LittleFS or lights remain safely off. The core may still
+initialize its onboard radio; the switch disables application networking.
+Flash storage, USB Serial, watchdog and the Pico itself remain real.
+
+Open Serial Monitor at 115200 for `mock ...` output and periodic sensor snapshots.
+Output requests are logged on changes, not every tick. Logs use a fixed 4 KiB
+queue, drain at most 32 bytes per loop, and drop records rather than block when
+full (`mockDropped` reports the count). No Wi-Fi credentials are logged.
+
+Real water sensing supports **one externally powered DS18B20** on GPIO 26, with
+the required pull-up. Parasite-power and multiple sensors on that bus are not
+supported. Conversion is asynchronous (at least 750 ms); samples/retries occur
+once per minute. CRC/family/range failures retain the last valid value and mark
+it unhealthy. Ambient percentage and averaged CPU temperature are separate
+readings. `valid=0` means no usable reading; never interpret its numeric default
+as a measurement. The onboard status LED is on when configuration and time are
+usable. Normal-operation HTTP sensor reporting remains deferred.
+
+### Provisioning steps
 
 1. Build and upload the firmware to the Pico 2 W. On missing or invalid settings,
    it scans nearby 2.4 GHz networks for up to eight seconds, then starts the

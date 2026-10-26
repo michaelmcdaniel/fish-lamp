@@ -4,3 +4,5 @@
 **/config.json
 **/config.bak
 **/config.tmp
+/src/SetupSecrets.h
+/setup-access.txt

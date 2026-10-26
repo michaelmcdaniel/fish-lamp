@@ -24,6 +24,29 @@ bool TimeService::read(int64_t& value) {
   return registers(0x0f, &status, 1) && registers(0, data, 7) &&
          clockmath::decodeRtc(data, status, value);
 }
+bool TimeService::setUtc(int64_t utc, uint32_t now) {
+  if (utc < clockmath::midnight({2000,1,1}) || utc >= clockmath::midnight({2100,1,1})) return false;
+  auto date = clockmath::dateAt(utc);
+  auto bcd = [](int value) { return uint8_t((value/10)*16 + value%10); };
+  uint8_t status;
+  if (!registers(0x0f, &status, 1)) return false;
+  Wire.beginTransmission(0x68);
+  Wire.write(0);
+  Wire.write(bcd(int(utc % 60)));
+  Wire.write(bcd(int(utc / 60 % 60)));
+  Wire.write(bcd(int(utc / 3600 % 24)));
+  Wire.write(uint8_t((utc / 86400 + 4) % 7 + 1));
+  Wire.write(bcd(date.day)); Wire.write(bcd(date.month)); Wire.write(bcd(date.year-2000));
+  if (Wire.endTransmission() != 0) return false;
+  Wire.beginTransmission(0x68);
+  Wire.write(0x0f); Wire.write(uint8_t(status & ~0x80));
+  if (Wire.endTransmission() != 0) return false;
+  int64_t check;
+  if (!read(check) || check < utc || check > utc + 1) return false;
+  seconds_ = check; advancedMs_ = attemptedMs_ = lastRtcMs = now;
+  valid_ = healthy_ = true; first_ = false;
+  return true;
+}
 void TimeService::tick(uint32_t now) {
   uint32_t elapsed = (now - advancedMs_) / 1000;
   if (valid_) seconds_ += elapsed;

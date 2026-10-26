@@ -4,6 +4,7 @@ class TimeService {
  public:
   void begin();
   void tick(uint32_t now);
+  bool setUtc(int64_t utc, uint32_t now);
   bool valid() const { return valid_; }
   bool rtcHealthy() const { return healthy_; }
   int64_t utc() const { return seconds_; }

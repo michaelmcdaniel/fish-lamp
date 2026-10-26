@@ -6,7 +6,7 @@
 void Diagnostics::begin() { resetReason_ = int(rp2040.getResetReason()); }
 void Diagnostics::tick(uint32_t now, uint32_t loopUs, const ConfigManager& config,
                        const TimeService& time, ScheduleController& schedule,
-                       const LightingController& lights) {
+                       const LightingController& lights, int networkState) {
   maxLoopUs_ = std::max(maxLoopUs_, loopUs);
   // Process at most one byte and transmit at most 32 bytes per loop. USB host
   // absence/backpressure must never prevent essential control progress.
@@ -27,9 +27,9 @@ void Diagnostics::tick(uint32_t now, uint32_t loopUs, const ConfigManager& confi
   if (sent_ == length_ && (first_ || uint32_t(now-lastMs_) >= 30000)) {
     first_ = false; lastMs_ = now;
     int n = snprintf(output_, sizeof(output_),
-      "config=%d time=%d rtc=%d solar=%d day=%d grow=%d forcedOff=%d strip=%d "
+      "config=%d network=%d time=%d rtc=%d solar=%d day=%d grow=%d forcedOff=%d strip=%d "
       "rtcAgeMs=%lu scheduleAgeMs=%lu applyAgeMs=%lu maxControlUs=%lu reset=%d\r\n",
-      int(config.state), time.valid(), time.rtcHealthy(), schedule.solarValid,
+      int(config.state), networkState, time.valid(), time.rtcHealthy(), schedule.solarValid,
       schedule.dayOn, schedule.growOn, schedule.forceOff, lights.ready(),
       static_cast<unsigned long>(now-time.lastRtcMs),
       static_cast<unsigned long>(now-schedule.lastCalculatedMs),

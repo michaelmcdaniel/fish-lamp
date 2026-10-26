@@ -9,6 +9,7 @@ struct Config {
   Offsets lightsOffsets, growOffsets;
   double latitude = 0, longitude = 0;
   clockmath::Zone zone;
+  char wifiSsid[33]{}, wifiPassword[65]{};
 };
-// Failure never modifies destination. Credentials are not retained or logged.
-bool parseConfig(const char* json, size_t length, Config& destination);
+// Failure never modifies destination. Credentials must never be logged.
+bool parseConfig(const char* json, size_t length, Config& destination, int64_t* setupUtc = nullptr);

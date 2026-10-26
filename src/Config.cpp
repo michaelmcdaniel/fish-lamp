@@ -63,7 +63,7 @@ bool optionalString(JsonVariantConst v, size_t max) {
   return v.isNull() || (v.is<const char*>() && strlen(v.as<const char*>()) <= max);
 }
 }
-bool parseConfig(const char* json, size_t length, Config& destination) {
+bool parseConfig(const char* json, size_t length, Config& destination, int64_t* setupUtc) {
   if (!json || length == 0 || length > MaxConfigBytes || memchr(json, 0, length)) return false;
   while (length && (json[length-1]==' ' || json[length-1]=='\r' ||
                    json[length-1]=='\n' || json[length-1]=='\t')) --length;
@@ -94,6 +94,25 @@ bool parseConfig(const char* json, size_t length, Config& destination) {
       !integer(doc["growlight-max-offset"], 0, 86400, c.growOffsets.max)) return false;
   if (!optionalString(doc["wifi-sid"], 32) || !optionalString(doc["wifi-pwd"], 64) ||
       !optionalString(doc["temperature-url"], 512)) return false;
+  const char* ssid = doc["wifi-sid"] | "";
+  const char* password = doc["wifi-pwd"] | "";
+  // Core supports open networks and WPA passphrases / 64-digit hex PSKs.
+  const size_t passwordLength = strlen(password);
+  if (passwordLength && (passwordLength < 8 || !*ssid)) return false;
+  for (size_t i = 0; i < passwordLength; ++i) {
+    unsigned char ch = static_cast<unsigned char>(password[i]);
+    if (ch < 32 || ch > 126) return false;
+    if (passwordLength == 64 && !((ch >= '0' && ch <= '9') ||
+        (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F'))) return false;
+  }
+  memcpy(c.wifiSsid, ssid, strlen(ssid)+1);
+  memcpy(c.wifiPassword, password, passwordLength+1);
+  if (setupUtc) {
+    if (!doc["setup-utc"].is<int64_t>()) return false;
+    int64_t utc = doc["setup-utc"].as<int64_t>();
+    if (utc < clockmath::midnight({2000,1,1}) || utc >= clockmath::midnight({2100,1,1})) return false;
+    *setupUtc = utc;
+  }
   destination = c;
   return true;
 }

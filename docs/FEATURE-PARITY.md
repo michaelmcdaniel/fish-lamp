@@ -13,26 +13,28 @@ desktop checks, not hardware acceptance.
 | Independent solar schedules | Implemented, all six legacy keys and seconds | Actual-location comparison with reference solar events pending |
 | Timezone / DST / midnight | Implemented explicit UTC, fixed offset or current US rules | Other DST rules deferred; no geographic defaults copied |
 | Manual overrides / force off | Implemented via bounded Serial commands | One hour or next boundary; documented correction to legacy inconsistency |
-| DS3231 | Implemented read/validate/holdover/recovery | RTC initialization, on-device bus timeout measurements pending |
+| DS3231 | Implemented read/validate/holdover/recovery and browser-time initialization | On-device bus timeout and readback measurements pending |
 | NTP | Deferred | Must be optional, bounded, and update RTC consistently |
-| LittleFS / settings | Implemented read/validate/backup fallback; explicit migration tool | Safe save/replace and power-cut recovery tests deferred; no save API exists yet |
+| LittleFS / settings | Implemented validation, backup fallback, migration and verified temp/rename save | Actual power-cut recovery tests pending; format only on explicit setup submit |
 | Water DS18B20 GPIO 26 | Deferred | Async conversion, CRC, reconnect and last-valid/stale reporting required |
 | Ambient GPIO 27 | Deferred | Preserve approximately 0–100% semantics |
 | Internal CPU temperature | Deferred | Use internal ADC channel, separate averaged reading |
 | Status LED | Deferred | No application status indication yet |
-| Wi-Fi station | Deferred | Bounded connect/retry state machine; scheduling must remain independent |
-| Protected provisioning AP | Deferred | Never starts an open AP; no AP is started at all |
-| HTTP and Vue UI | Deferred | Every route below remains unavailable |
+| Wi-Fi station | Implemented nonblocking connection/retry states | Actual outage/reconnection timing tests pending |
+| Protected provisioning AP | Implemented for missing/invalid config, local mobile page, test/save/restart | Private per-build key; physical AP and restart tests pending |
+| HTTP and Vue UI | Setup-only page implemented | Legacy normal-operation API and Vue UI remain deferred |
 | Telemetry POST | Deferred | Preserve Fahrenheit `temperature`; document that humidity/pressure were placeholders |
 | Watchdog and diagnostics | Implemented | USB snapshot, reset cause, progress timings; fault-injection hardware tests pending |
 
-Deferred HTTP contract: `GET /`, `/status`, `/lights/on`, `/lights/off`,
+Deferred normal-operation HTTP contract: legacy `GET /`, `/status`, `/lights/on`, `/lights/off`,
 `/lights/brightness/{value}`, `/lights/{index}/{hexcolor}`,
 `/lights/{start}-{end}/{hexcolor}`, `/lights/{hexcolor}`, `/grow-light/on`,
 `/grow-light/off`, `/grow-light`, `/log/temp[/on|/off]`, and
 `/log/schedule[/on|/off]`. Future `/status` must retain `lightsOn`, `growlightOn`,
 `lights`, `schedule`, `growlightDelay`, `lightsDelay`, `waterTemp`, and `ambient`.
-There is currently no claim of browser compatibility or offline UI asset support.
+The setup page is a new locally served interface, not the legacy Vue page. Its
+mobile browser submission was tested against a local preview server; physical
+AP serving remains unverified. Normal-operation browser compatibility is deferred.
 
 ## Observed legacy defects not copied
 
@@ -51,7 +53,6 @@ There is currently no claim of browser compatibility or offline UI asset support
 
 ## Next vertical slice
 
-Add a bounded USB commissioning path for RTC/configuration and an atomic
-LittleFS save/recovery policy, then validate power interruption on hardware.
-Follow with asynchronous sensors, measured Wi-Fi recovery, bounded API/UI,
-telemetry, and password-protected provisioning. Build and fault-test each slice.
+Validate first-boot AP setup, RTC initialization, saving/restart and power
+interruption on hardware. Then add asynchronous sensors, the normal-operation
+API/UI and configuration maintenance, and telemetry. Build and fault-test each slice.

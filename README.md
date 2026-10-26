@@ -1,8 +1,8 @@
-# Fish Lamp — initial offline firmware
+# Fish Lamp — offline lighting and first-boot setup
 
 This is the first functional C++ slice for Pico 2 W, not the completed appliance.
 It implements safe outputs, DS3231-backed offline time, solar scheduling, validated
-configuration loading, and USB Serial controls. Hardware reliability has **not**
+configuration storage, a protected Wi-Fi setup page, and USB Serial controls. Hardware reliability has **not**
 been established. See [feature parity](docs/FEATURE-PARITY.md) and
 [verification](docs/VERIFICATION.md) for scope and remaining work.
 
@@ -12,6 +12,12 @@ Verified dependencies: Arduino-Pico **6.0.0**, ArduinoJson **7.4.3**, and
 Adafruit NeoPixel **1.15.2**. Arduino CLI can install missing libraries with
 `arduino-cli lib install "ArduinoJson@7.4.3" "Adafruit NeoPixel@1.15.2"`.
 The existing `build.ps1` and its board/flash selection are unchanged.
+
+The private setup key has already been generated in this workspace. On a fresh
+checkout, first run `tools/new-setup-key.ps1` **once**. It creates ignored
+`src/SetupSecrets.h` and `setup-access.txt`; builds intentionally fail without
+the header rather than creating an open AP. Keep these files private and reuse
+them for subsequent builds. The generator never overwrites existing access files.
 
 ```powershell
 ./build.ps1
@@ -31,16 +37,50 @@ Host tests require Visual Studio C++ tools. `test.ps1` accepts `-ArduinoJson`
 with the library's `src` path if it is not in the default Documents location.
 Generated firmware and native test binaries stay in ignored build directories.
 
+## Configure on first boot
+
+1. Build and upload the firmware to the Pico 2 W. On missing or invalid settings,
+   it starts the password-protected **FishLamp-Setup** network. Find its password
+   in the local ignored `setup-access.txt` file. Credentials never print to Serial.
+2. Join that network from your phone/computer and open **http://192.168.4.1/**.
+   Stay connected if the device warns that this Wi-Fi has no Internet. There is
+   no captive DNS redirect; enter the address explicitly. All page assets are local.
+3. Enter home Wi-Fi (or choose offline lighting), coordinates, standard timezone,
+   DST rule, colors/brightness and independent schedule offsets/off limits.
+   Confirm the phone/computer's clock is correct; its UTC epoch sets the DS3231.
+   An optional local JSON import preserves per-pixel colors and schedule settings.
+4. Select **Save settings & restart**. For home Wi-Fi, the browser receives an
+   acknowledgement before AP mode stops. The lamp attempts station connection
+   for up to 20 seconds. On success, it initializes/verifies the RTC, saves and
+   verifies settings, then restarts. Offline mode skips the connection test and
+   reports successful saving directly before restarting.
+5. If network testing, RTC verification or storage fails, setup remains available
+   or returns automatically. Rejoin FishLamp-Setup and reload for the error.
+   The browser's initial network-test acknowledgement is not a saved confirmation.
+
+After a successful restart, saved settings are loaded and lighting starts using
+the RTC. **Setup does not repeat on every power-up.** The AP is absent on a normal
+configured boot. Station failures later leave lighting operating offline, with
+20-second connection attempts separated by 60-second retry waits. Changing a
+previously saved configuration through a normal-operation web UI is still deferred.
+
 ## Runtime policy
 
 * GPIO 8 is driven LOW first; all 85 GPIO 7 GRB pixels are cleared. The grow
   output retains HIGH=on. Physical polarity/color order still need confirmation.
 * An 8-second hardware watchdog starts before filesystem/time initialization.
-  Only completion of essential control feeds it. There are no threads or Wi-Fi
-  calls. USB status transmits at most 32 available bytes per iteration.
+  Only completion of essential control feeds it. All Wi-Fi runs on core 0 after
+  essential control, with `beginNoBlock` connection attempts. There are no threads.
+  USB status transmits at most 32 available bytes per iteration. Low-level Wi-Fi
+  initialization and flash-operation durations still require hardware measurement.
 * LittleFS auto-format is disabled. Missing/corrupt settings or a failed mount
-  keep RGB completely black and grow LOW. Valid `/config.bak` is tried after
-  invalid/missing `/config.json`. No settings are written by this release.
+  keep RGB completely black and grow LOW while setup runs. Valid `/config.bak`
+  is tried after invalid/missing `/config.json`. Explicit setup submission may
+  format an unreadable filesystem; merely booting never formats it. Settings
+  write to `/config.tmp`, are read back byte-for-byte and validated, then replace
+  the primary using LittleFS rename. An existing valid primary is first renamed
+  to backup; a corrupt primary never replaces a good backup. Boot ignores temp
+  files and uses backup if power failed between renames. No routine loop saves.
 * DS3231 uses SDA 16 / SCL 17, 100 kHz, and 5 ms transaction timeouts.
   A read attempt comprises at most four I2C operations, nominally at most 20 ms
   of timeout waits plus overhead. Reads occur at boot and once per minute.
@@ -49,7 +89,8 @@ Generated firmware and native test binaries stay in ignored build directories.
 * After a successful RTC read, failures retain the software UTC timebase;
   `rtc=0` reports holdover. Holdover continues indefinitely until recovery, with
   accumulating oscillator error. A later valid read corrects software time.
-  The firmware never writes the RTC or clears its oscillator-stop flag.
+  Only an explicit setup submission writes the RTC and clears its oscillator-stop
+  flag, followed by readback verification. Routine polling never writes the RTC.
 * Schedules use explicit coordinates and timezone configuration. Windows are
   inclusive at on and exclusive at off. Yesterday/today/tomorrow are cached to
   support offsets spanning midnight. Cache refresh follows the local date,
@@ -103,13 +144,18 @@ and endpoint values are not displayed. Legacy values outside the accepted ranges
 are rejected for explicit correction, not silently clamped.
 
 `wifi-sid`, `wifi-pwd`, `temperature-url`, `createDate`, and `modDate` remain in the
-source/migrated JSON. Networking fields are unused at runtime in this release.
-The parser validates optional network strings' types/lengths but does not retain
-them. Firmware saves, atomic replacement, USB import, filesystem upload and RTC
-setting are deferred. A compatible LittleFS image containing the validated
-configuration and a correctly initialized UTC RTC are **commissioning prerequisites**;
-building/flashing the sketch alone does not provision them. Existing MicroPython
-flash layout is not assumed compatible with this Arduino partition.
+source/migrated JSON. SSID/password are retained privately for station connection;
+the telemetry URL remains unused. Wi-Fi passwords must be empty for an open
+network, 8–63 printable ASCII characters, or a 64-digit hexadecimal key. This
+adds validation for previously unused network fields. Credentials are never
+returned by the setup endpoints or included in diagnostics. The setup page now
+initializes storage and RTC without a separate filesystem upload or USB import.
+Existing MicroPython flash layout is not assumed compatible with the Arduino
+partition; save a copy of settings before replacing an existing installation.
+
+The setup-only `setup-utc` field is an integer browser UTC epoch. It is validated
+on submission and ignored on later boots; saved time never replaces RTC time.
+The firmware accounts for elapsed network-testing time before writing the RTC.
 
 ## USB Serial interface
 
@@ -135,6 +181,15 @@ reports driver initialization. Ages report milliseconds since last success,
 calculation or hardware change (wrap-safe intervals, not persistent timestamps).
 Age fields before any success are not meaningful; inspect validity fields first.
 `maxControlUs` covers essential work only, excluding diagnostics. `reset` is the
-installed core's reset reason enum. No credentials or configuration values print.
+installed core's reset reason enum. `network` reports: 0 disabled, 1 starting AP,
+2 setup AP, 3 AP failure/backoff, 4 testing candidate Wi-Fi, 5 restart pending,
+6 station connecting, 7 station connected, 8 station retry. No credentials or
+configuration values print.
 
-HTTP port 80 and the existing browser UI are **not implemented in this slice**.
+HTTP port 80 serves setup only: `GET /`, `GET /session`, `POST /configure`.
+Requests require the fixed AP host and a session token for configuration changes;
+foreign origins and chunked/ambiguous body framing are rejected. One request is
+serviced at a time, with a listen backlog of one, 2 KiB headers, 16 KiB bodies,
+256-byte per-tick receive/send budgets, a 2-second inactivity limit and 15-second
+total limit. Client writes use a 5 ms timeout; close uses a 1 ms ACK wait. No
+AP+STA overlap is used. The legacy normal-operation API/UI is still deferred.

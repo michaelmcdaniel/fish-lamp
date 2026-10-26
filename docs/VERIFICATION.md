@@ -1,6 +1,35 @@
 # Verification record — 2026-10-26
 
-## Executed
+## Setup AP increment — executed
+
+* Arduino-Pico 6.0.0 build passed using unchanged build.ps1 and FQBN.
+  Image: **404,352 bytes flash (10%)**, **112,964 bytes static RAM (21%)**,
+  411,324 bytes reported remaining for heap/stack. Runtime memory not measured.
+* **218,101 host assertions passed**, with no host compiler warnings. Setup
+  tests exercise production HTTP parsing, service state transitions, storage and
+  RTC adapters against deterministic fake Wi-Fi/Wire/LittleFS transports.
+* Tested: protected AP selection; locally served page/session; token rejection;
+  malformed, duplicate-length, chunked, oversized and foreign-host/origin requests;
+  partial/slow requests and write backpressure; AP retry backoff; candidate Wi-Fi
+  failure returning to setup; successful candidate connection before saving;
+  offline submit; verified RTC initialization/OSF handling; no reboot on errors;
+  saved config loading after restart without another setup AP; normal station
+  disconnect/retry while retaining settings.
+* Storage tests: no boot formatting; explicit-submit formatting; short writes;
+  failures at either rename; old primary/backup recovery; uncommitted temp ignored.
+  These model operation failures, not real flash corruption or physical power cuts.
+* Migration regression tests passed. Real credentials were not used in fixtures.
+* Mobile page verified at a 390-pixel requested viewport in the in-app browser:
+  offline form submission, clock confirmation, success-message display, no
+  horizontal overflow, and no console errors. A preview server captured synthetic
+  JSON; the production C++ parser accepted its 85-pixel arrays and schedule units.
+  This did not contact a Pico. Screenshot: ignored `test-build/setup-preview.png`.
+* AP password generated into ignored local access files, never printed or staged.
+* Compiler warnings are from the existing NeoPixel PIO initializer and the core's
+  WiFi/BearSSL overloaded virtual declarations; no firmware-source warnings.
+* No physical AP, RTC, flash power-cut, restart, or 24-hour hardware test performed.
+
+## Initial offline slice — historical results
 
 * Built safe outputs, RTC/time, solar math, integrated configuration/scheduler,
   and diagnostics slices with the existing `build.ps1` using a process-only
@@ -44,10 +73,11 @@ Record board/core/library versions, supply, RTC battery status, firmware revisio
 test start/end UTC, configured timezone, maximum measured loop time, reset cause,
 and observed output transitions. Keep credentials and private settings out of logs.
 
-1. Commission a compatible LittleFS image and DS3231 UTC separately. Validate the
-   JSON with `test-build/tests.exe --validate <path>` first. Confirm RTC OSF is
-   cleared only after deliberate clock initialization. Back up existing settings
-   before any firmware/filesystem replacement.
+1. On blank/invalid configuration, join the protected FishLamp-Setup AP and visit
+   http://192.168.4.1/. Exercise home-Wi-Fi and offline branches, wrong credentials,
+   disconnected RTC, storage errors, and successful save/restart. Confirm the
+   next boot loads settings and does not restart setup. Confirm RTC UTC/readback.
+   Back up existing settings before replacing an existing installation.
 2. Start with the actual aquarium loads disconnected for GPIO polarity checks.
    Cold boot, reset, missing/corrupt config, failed mount, invalid RTC and absent
    RTC must produce black RGB / grow LOW. Check boot glitches with instruments;
@@ -63,17 +93,21 @@ and observed output transitions. Keep credentials and private settings out of lo
    Test stuck I2C lines and reconnect; measure actual transaction/control times.
    Correct the clock forward/back across a local date boundary; verify schedule.
 6. Exercise missing/invalid primary and valid backup. With no valid file, require
-   safe-off. Confirm no auto-format and no routine flash writes. Atomic-save
-   power-cut testing remains blocked on the future save implementation.
+   safe-off and setup AP. Confirm no boot auto-format and no routine flash writes.
+   Interrupt power during temp write, flush, verification, backup rename and
+   primary rename. Each boot must either load a valid primary/backup or offer
+   setup safely; it must never load an uncommitted temp file.
 7. Test watchdog recovery with a deliberately stalled test build, restore the
    normal build, and verify safe boot and reported reset reason. Check no rapid
    reboot cycle under normal RTC faults or disconnected USB.
 8. Record memory/heap trends and actual strip frame time. A nominal 85-pixel
    800 kHz frame takes roughly 2.55 ms plus latch/driver overhead; this is an
    estimate, **not a measured result**. Measure USB backpressure behavior too.
-9. After sensors/networking are implemented, perform the remaining AGENTS.md
-   DS18B20, DNS/NTP, hostile/slow HTTP client, telemetry outage, reconnection,
-   protected AP and API/UI compatibility tests. None has passed yet.
+9. Physically test slow/hostile setup clients, AP/station transitions, repeated
+   failed submissions, low-level Wi-Fi initialization times, response delivery
+   before disconnect/reboot, and reconnection. After remaining services are
+   implemented, test DS18B20, DNS/NTP, telemetry and the legacy API/UI. No hardware
+   result for any of these has been recorded yet.
 
 Release gate: do not call this a reliable replacement appliance until the
 hardware checklist and deferred essential commissioning/services are complete.

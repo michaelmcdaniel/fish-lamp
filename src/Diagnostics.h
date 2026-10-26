@@ -9,7 +9,7 @@ class Diagnostics {
   void begin();
   void tick(uint32_t now, uint32_t loopUs, const ConfigManager& config,
             const TimeService& time, ScheduleController& schedule,
-            const LightingController& lights);
+            const LightingController& lights, int networkState);
  private:
   char output_[320]{};
   unsigned length_ = 0, sent_ = 0;

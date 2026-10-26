@@ -40,12 +40,17 @@ Generated firmware and native test binaries stay in ignored build directories.
 ## Configure on first boot
 
 1. Build and upload the firmware to the Pico 2 W. On missing or invalid settings,
-   it starts the password-protected **FishLamp-Setup** network. Find its password
+   it scans nearby 2.4 GHz networks for up to eight seconds, then starts the
+   password-protected **FishLamp-Setup** network. Find its password
    in the local ignored `setup-access.txt` file. Credentials never print to Serial.
 2. Join that network from your phone/computer and open **http://192.168.4.1/**.
    Stay connected if the device warns that this Wi-Fi has no Internet. There is
    no captive DNS redirect; enter the address explicitly. All page assets are local.
-3. Enter home Wi-Fi (or choose offline lighting), coordinates, standard timezone,
+3. Choose home Wi-Fi from the editable network combo box (or choose offline
+   lighting). It lists up to 24 distinct networks, strongest signal first, from
+   the scan before AP startup. Hidden names can be typed manually, including
+   when scanning fails. The list is cached until the next setup boot.
+   Enter coordinates, standard timezone,
    DST rule, colors/brightness and independent schedule offsets/off limits.
    Confirm the phone/computer's clock is correct; its UTC epoch sets the DS3231.
    An optional local JSON import preserves per-pixel colors and schedule settings.
@@ -183,10 +188,12 @@ Age fields before any success are not meaningful; inspect validity fields first.
 `maxControlUs` covers essential work only, excluding diagnostics. `reset` is the
 installed core's reset reason enum. `network` reports: 0 disabled, 1 starting AP,
 2 setup AP, 3 AP failure/backoff, 4 testing candidate Wi-Fi, 5 restart pending,
-6 station connecting, 7 station connected, 8 station retry. No credentials or
+ 6 station connecting, 7 station connected, 8 station retry, 9 scanning. No credentials or
 configuration values print.
 
-HTTP port 80 serves setup only: `GET /`, `GET /session`, `POST /configure`.
+HTTP port 80 serves setup only: `GET /`, `GET /session`, `GET /networks`,
+`POST /configure`. Network discovery uses a fixed-capacity CYW43 callback and
+finishes station scanning before starting the AP; AP+STA is not required.
 Requests require the fixed AP host and a session token for configuration changes;
 foreign origins and chunked/ambiguous body framing are rejected. One request is
 serviced at a time, with a listen backlog of one, 2 KiB headers, 16 KiB bodies,

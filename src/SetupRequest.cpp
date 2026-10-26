@@ -19,6 +19,7 @@ void SetupRequest::parseHeaders() {
   *lineEnd = 0;
   if (!strcmp(headers_,"GET / HTTP/1.1")) route=Route::Page;
   else if (!strcmp(headers_,"GET /session HTTP/1.1")) route=Route::Session;
+  else if (!strcmp(headers_,"GET /networks HTTP/1.1")) route=Route::Networks;
   else if (!strcmp(headers_,"POST /configure HTTP/1.1")) route=Route::Configure;
   bool lengthSeen=false, typeSeen=false, tokenSeen=false, hostSeen=false;
   for (char* line = lineEnd+2; *line; line = lineEnd+2) {

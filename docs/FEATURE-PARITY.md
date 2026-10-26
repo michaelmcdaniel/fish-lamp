@@ -22,6 +22,7 @@ desktop checks, not hardware acceptance.
 | Status LED | Deferred | No application status indication yet |
 | Wi-Fi station | Implemented nonblocking connection/retry states | Actual outage/reconnection timing tests pending |
 | Protected provisioning AP | Implemented for missing/invalid config, local mobile page, test/save/restart | Private per-build key; physical AP and restart tests pending |
+| Setup network discovery | Bounded pre-AP scan; editable SSID combo; strongest 24 distinct networks cached | Manual hidden-network entry; physical scanning pending |
 | HTTP and Vue UI | Setup-only page implemented | Legacy normal-operation API and Vue UI remain deferred |
 | Telemetry POST | Deferred | Preserve Fahrenheit `temperature`; document that humidity/pressure were placeholders |
 | Watchdog and diagnostics | Implemented | USB snapshot, reset cause, progress timings; fault-injection hardware tests pending |

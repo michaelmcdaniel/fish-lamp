@@ -9,7 +9,9 @@ body{font:16px system-ui,sans-serif;background:#edf5f6;color:#17353b;margin:0;pa
 <p id="message" role="status" aria-live="polite">Loading setup session…</p>
 <form id="setup"><fieldset><legend>Home Wi-Fi</legend>
 <label><input id="offline" type="checkbox"> Use lighting offline without home Wi-Fi</label>
-<label>Network name (2.4 GHz)<input id="ssid" maxlength="32" autocomplete="off" required></label>
+<label>Network name (2.4 GHz)<input id="ssid" list="networks" maxlength="32" autocomplete="off" aria-describedby="networkStatus" placeholder="Choose a network or type its name" required></label>
+<datalist id="networks"></datalist>
+<small id="networkStatus" role="status">Loading available networks…</small>
 <label>Network password<input id="password" type="password" maxlength="64" autocomplete="new-password"></label>
 <small>Leave the password empty only for an open home network. A secured network needs 8–63 characters or a 64-digit hexadecimal key.</small>
 </fieldset><fieldset><legend>Location &amp; time</legend>
@@ -38,7 +40,8 @@ const $=id=>document.getElementById(id);let token='';
 const message=text=>$('message').textContent=text;
 const clock=()=>$('clock').textContent=new Date().toLocaleString();clock();setInterval(clock,1000);
 $('offline').onchange=()=>{const disabled=$('offline').checked;$('ssid').disabled=$('password').disabled=disabled;$('ssid').required=!disabled;};
-async function session(){try{const r=await fetch('/session',{cache:'no-store'});if(!r.ok)throw Error('Could not open setup session.');const s=await r.json();token=s.token;message(s.error||'Ready. Enter your configuration below.');$('save').disabled=false;}catch(e){message(e.message+' Reconnect to FishLamp-Setup and reload.');}}session();
+async function loadNetworks(){try{const r=await fetch('/networks',{cache:'no-store'});if(!r.ok)throw Error();const scan=await r.json();const names=scan.networks;if(!Array.isArray(names))throw Error();$('networks').replaceChildren();for(const name of names){if(typeof name!=='string')continue;const option=document.createElement('option');option.value=name;$('networks').append(option);}$('networkStatus').textContent=scan.status==='ready'?(names.length?'Choose a nearby network, or type a hidden network name.':'No networks found. You can still type a network name.'):'Network scan was incomplete. Choose a listed network or type its name.';}catch(e){$('networkStatus').textContent='Could not load networks. You can still type the network name.';}}
+async function session(){try{const r=await fetch('/session',{cache:'no-store'});if(!r.ok)throw Error('Could not open setup session.');const s=await r.json();token=s.token;message(s.error||'Ready. Enter your configuration below.');$('save').disabled=false;await loadNetworks();}catch(e){message(e.message+' Reconnect to FishLamp-Setup and reload.');}}session();
 const number=id=>Number($(id).value);
 const seconds=id=>{const [h,m]=$(id).value.split(':').map(Number);return h*3600+m*60;};
 function pixels(color,brightness){const hex=$(color).value;const p=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));p.push(number(brightness));return Array.from({length:85},()=>p.slice());}

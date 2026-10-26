@@ -1,5 +1,23 @@
 # Verification record — 2026-10-26
 
+## Setup network combo increment — executed
+
+* Unchanged build.ps1 passed with Arduino-Pico 6.0.0: **407,616 bytes flash
+  (10%)**, **118,684 bytes static RAM (22%)**, 405,604 bytes remaining.
+  Existing dependency warnings remain; no firmware-source warnings.
+* **218,122 host assertions passed**. Added scan tests cover duplicate SSIDs,
+  strongest-first ordering, 24-result capacity, full-length names, JSON escaping,
+  UTF-8 validation, hidden/binary names, failure, timeout across millis wrap,
+  ignored late callbacks, and AP startup only after scanning ends.
+* Cached `/networks` response and queued HTTP requests tested. One connection
+  can wait in the listen backlog while the preceding response closes.
+* Local browser preview verified the combo's three synthetic options (including
+  quotes and ampersand), submission of a listed name, manual hidden-name entry,
+  and no console errors. No real credentials or live device were used.
+  Screenshot: ignored `test-build/network-combo-preview.png`.
+* Physical discovery, mobile-browser dropdown behavior, scan durations and
+  AP transition under real radio conditions remain hardware acceptance items.
+
 ## Setup AP increment — executed
 
 * Arduino-Pico 6.0.0 build passed using unchanged build.ps1 and FQBN.

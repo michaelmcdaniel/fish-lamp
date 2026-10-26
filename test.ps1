@@ -12,7 +12,7 @@ $runner = Join-Path $out 'run.cmd'
 @echo off
 call "$vs\VC\Auxiliary\Build\vcvars64.bat" >nul
 if errorlevel 1 exit /b 1
-cl /nologo /std:c++17 /EHsc /W4 /I"$root\tests\fakes" /I"$root\src" /I"$ArduinoJson" "$root\tests\test_main.cpp" "$root\tests\test_setup.cpp" "$root\src\ClockMath.cpp" "$root\src\SolarSchedule.cpp" "$root\src\ScheduleController.cpp" "$root\src\Config.cpp" "$root\src\ConfigManager.cpp" "$root\src\TimeService.cpp" "$root\src\LightingController.cpp" "$root\src\SetupRequest.cpp" "$root\src\SetupService.cpp" /Fe:tests.exe
+cl /nologo /std:c++17 /EHsc /W4 /I"$root\tests\fakes" /I"$root\src" /I"$ArduinoJson" "$root\tests\test_main.cpp" "$root\tests\test_setup.cpp" "$root\src\ClockMath.cpp" "$root\src\SolarSchedule.cpp" "$root\src\ScheduleController.cpp" "$root\src\Config.cpp" "$root\src\ConfigManager.cpp" "$root\src\TimeService.cpp" "$root\src\LightingController.cpp" "$root\src\SetupRequest.cpp" "$root\src\SetupService.cpp" "$root\src\NetworkScan.cpp" /Fe:tests.exe
 if errorlevel 1 exit /b 1
 tests.exe
 exit /b %errorlevel%

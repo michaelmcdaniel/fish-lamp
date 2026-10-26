@@ -2,12 +2,13 @@
 #include "ConfigManager.h"
 #include "TimeService.h"
 #include "SetupRequest.h"
+#include "NetworkScan.h"
 #include <WiFi.h>
 
 class SetupService {
  public:
   enum class State { Disabled, StartAP, AccessPoint, APFailed, Testing, Restart,
-                     StationConnecting, StationOnline, StationRetry };
+                     StationConnecting, StationOnline, StationRetry, Scanning };
   void begin(const ConfigManager& settings);
   void tick(uint32_t now, ConfigManager& settings, TimeService& clock);
   State state() const { return state_; }
@@ -24,6 +25,7 @@ class SetupService {
   WiFiClient client_;
   SetupRequest request_;
   Config candidate_;
+  NetworkScan networks_;
   int64_t candidateUtc_ = 0;
   uint32_t stateMs_ = 0, acceptedMs_ = 0, progressMs_ = 0, submittedMs_ = 0;
   bool clientActive_ = false, responding_ = false, testAfterResponse_ = false;

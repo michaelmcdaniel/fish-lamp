@@ -19,7 +19,13 @@ static std::string post(const std::string& body,const std::string& token) {
   return "POST /configure HTTP/1.1\r\nHost: 192.168.4.1\r\nContent-Type: application/json\r\nX-Setup-Token: "+token+"\r\nContent-Length: "+std::to_string(body.size())+"\r\n\r\n"+body;
 }
 static void feed(SetupRequest& r,const std::string& data) { for(char ch:data)r.feed(ch); }
-static void resetHardware() { LittleFS=FakeFS{};Wire=FakeWire{};WiFi=FakeWiFi{};rp2040=FakeRp2040{};fakeIncoming.clear();fakeMillis=0; }
+static void resetHardware() { LittleFS=FakeFS{};Wire=FakeWire{};WiFi=FakeWiFi{};rp2040=FakeRp2040{};fakeScan=FakeScan{};fakeIncoming.clear();fakeMillis=0; }
+static void scanResult(const std::string& name,int rssi=-60) {
+  cyw43_ev_scan_result_t result;
+  result.rssi=int16_t(rssi);result.ssid_len=uint8_t(name.size());
+  memcpy(result.ssid,name.data(),std::min(name.size(),sizeof(result.ssid)));
+  fakeScan.callback(fakeScan.context,&result);
+}
 static void pump(SetupService& s,ConfigManager& c,TimeService& t,unsigned ticks=1) {
   for(unsigned i=0;i<ticks;++i) { ++fakeMillis;s.tick(fakeMillis,c,t); }
 }
@@ -57,6 +63,39 @@ unsigned testSetup(const std::string& fixture) {
   req.reset();feed(req,std::string(2050,'a'));REQUIRE(req.error==431);
   req.reset();feed(req,post(body,std::string(31,'0')));REQUIRE(req.error==403);
   req.reset();feed(req,get("/session").substr(0,10));REQUIRE(!req.complete && !req.error);
+  req.reset();feed(req,get("/networks"));REQUIRE(req.complete && req.route==SetupRequest::Route::Networks);
+
+  resetHardware();NetworkScan scan;fakeScan.active=true;scan.begin(0xfffffff0u);
+  scanResult("synthetic-one",-70);scanResult("synthetic-one",-30);
+  scanResult("synthetic-two",-50);scanResult("quote\"slash\\line\n",-60);
+  scanResult("caf\xc3\xa9",-80);scanResult("");scanResult(std::string("bad\0name",8));
+  scanResult(std::string("\xc0\xaf",2));scanResult(std::string(32,'x'),-90);
+  REQUIRE(!scan.tick(uint32_t(0xfffffff0u+7999u)));
+  REQUIRE(scan.tick(uint32_t(0xfffffff0u+8000u)) && !fakeScan.station);
+  JsonDocument scanJson;REQUIRE(!deserializeJson(scanJson,scan.json()));
+  REQUIRE(scanJson["status"]=="timeout" && scanJson["networks"].size()==5);
+  REQUIRE(scanJson["networks"][0]=="synthetic-one");
+  REQUIRE(scanJson["networks"][2]=="quote\"slash\\line\n");
+  REQUIRE(scanJson["networks"][3]=="caf\xc3\xa9");
+  const std::string snapshot=scan.json();scanResult("late-callback",-10);REQUIRE(snapshot==scan.json());
+  fakeScan=FakeScan{};scan.begin(0);
+  for(int i=0;i<60;++i)scanResult("synthetic-"+std::to_string(i),-100+i);
+  REQUIRE(scan.tick(1));REQUIRE(!deserializeJson(scanJson,scan.json()));
+  REQUIRE(scanJson["status"]=="ready" && scanJson["networks"].size()==24);
+  REQUIRE(scanJson["networks"][0]=="synthetic-59");
+  fakeScan=FakeScan{};fakeScan.error=-1;scan.begin(0);REQUIRE(scan.tick(1));
+  REQUIRE(!deserializeJson(scanJson,scan.json()) && scanJson["status"]=="failed");
+
+  resetHardware();ConfigManager discovery;discovery.begin();TimeService discoveryClock;discoveryClock.begin();SetupService discovering;
+  fakeScan.active=true;discovering.begin(discovery);scanResult("synthetic-nearby");
+  pump(discovering,discovery,discoveryClock,7999);REQUIRE(WiFi.starts==0 && discovering.state()==SetupService::State::Scanning);
+  pump(discovering,discovery,discoveryClock);REQUIRE(WiFi.starts==1 && !fakeScan.station);
+  auto listed=exchange(discovering,discovery,discoveryClock,get("/networks"));
+  REQUIRE(listed.find("synthetic-nearby")!=std::string::npos && listed.find("timeout")!=std::string::npos);
+  REQUIRE(fakeScan.starts==1); // Requests serve a snapshot, never trigger scanning.
+  auto first=connect(get("/session"));pump(discovering,discovery,discoveryClock,4);
+  auto queued=connect(get("/networks"));pump(discovering,discovery,discoveryClock,600);
+  REQUIRE(!first->live && !queued->live && queued->output.find("200 OK")!=std::string::npos);
 
   resetHardware();LittleFS.mountOK=false;
   ConfigManager storage;storage.begin(); REQUIRE(!storage.valid() && LittleFS.formats==0 && !LittleFS.autoFormat);

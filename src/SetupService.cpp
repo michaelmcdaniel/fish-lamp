@@ -14,7 +14,9 @@ static_assert(sizeof(FISH_LAMP_SETUP_PASSWORD) >= 9 && sizeof(FISH_LAMP_SETUP_PA
 
 void SetupService::begin(const ConfigManager& settings) {
   WiFi.setTimeout(1000);
-  if (!settings.valid()) state_ = State::StartAP;
+  if (!settings.valid()) {
+    WiFi.end(); networks_.begin(millis()); state_=State::Scanning;
+  }
   else if (*settings.config.wifiSsid) {
     WiFi.beginNoBlock(settings.config.wifiSsid, *settings.config.wifiPassword ? settings.config.wifiPassword : nullptr);
     state_ = State::StationConnecting; stateMs_ = millis();
@@ -63,6 +65,7 @@ void SetupService::commit(uint32_t now, ConfigManager& settings, TimeService& cl
 void SetupService::handle(uint32_t now, ConfigManager& settings, TimeService& clock) {
   using Route=SetupRequest::Route;
   if (request_.route==Route::Page) reply(200,"text/html; charset=utf-8",SetupPage,now);
+  else if (request_.route==Route::Networks) reply(200,"application/json",networks_.json(),now);
   else if (request_.route==Route::Session) {
     snprintf(session_,sizeof(session_),"{\"token\":\"%s\",\"error\":\"%s\"}",token_,lastError_);
     reply(200,"application/json",session_,now);
@@ -83,6 +86,10 @@ void SetupService::handle(uint32_t now, ConfigManager& settings, TimeService& cl
   } else reply(404,"text/plain","Not found. Open http://192.168.4.1/",now);
 }
 void SetupService::tick(uint32_t now, ConfigManager& settings, TimeService& clock) {
+  if(state_==State::Scanning) {
+    if(!networks_.tick(now)) return;
+    state_=State::StartAP;
+  }
   if (state_==State::StartAP) { startAP(now); return; }
   if (state_==State::APFailed) {
     if (uint32_t(now-stateMs_)>=60000) state_=State::StartAP;
@@ -113,8 +120,9 @@ void SetupService::tick(uint32_t now, ConfigManager& settings, TimeService& cloc
     closeClient(); rp2040.reboot(); return;
   }
   if (state_!=State::AccessPoint && state_!=State::Restart) return;
-  // Drain one extra connection per tick; one active request and backlog of one.
-  if (clientActive_ && server_.hasClient()) { auto extra=server_.accept(); extra.stop(1); }
+  // Keep the single queued connection until the active response closes. Browsers
+  // may request /session or /networks before the preceding socket has closed.
+  // The installed lwIP enables TCP_LISTEN_BACKLOG; begin(80,1) bounds this queue.
   if (!clientActive_ && state_==State::AccessPoint && !testAfterResponse_) {
     client_=server_.accept();
     if (client_) {
@@ -140,6 +148,7 @@ void SetupService::tick(uint32_t now, ConfigManager& settings, TimeService& cloc
     }
   }
   if (!clientActive_ && testAfterResponse_) {
+    if(server_.hasClient()) {auto pending=server_.accept();pending.stop(1);}
     testAfterResponse_=false; server_.end(); WiFi.end();
     WiFi.beginNoBlock(candidate_.wifiSsid,*candidate_.wifiPassword ? candidate_.wifiPassword : nullptr);
     state_=State::Testing; stateMs_=now;

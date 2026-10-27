@@ -1,4 +1,22 @@
-# Verification record — 2026-10-26
+# Verification record
+
+## New Windows computer toolchain — 2026-10-27
+
+* Installed Arduino CLI 1.5.1 in the user-local Programs directory after verifying
+  the official release archive's SHA-256 checksum. Installed Arduino-Pico 6.0.0;
+  confirmed ArduinoJson 7.4.3, Adafruit NeoPixel 1.15.2 and OneWire 2.3.8.
+* Added `setup-tools.ps1` and CLI discovery shared by build/test scripts. Retained
+  the Pico 2 W board and 4 MiB flash / 256 KiB filesystem selection. Test library
+  discovery now uses Arduino CLI's resolved sketchbook instead of a fixed path.
+* Setup rerun under Windows PowerShell reused the installed dependencies.
+  Host tests passed under PowerShell 7 and Windows PowerShell: **218,122 checks**
+  plus both real/mock device-adapter suites. Configuration migration checks passed.
+* `./build.ps1` passed with the default real-device profile: **409,952 bytes flash**
+  and **123,528 bytes static RAM**, leaving 400,760 bytes for stack/heap. Warnings
+  were in the NeoPixel, OneWire and core Wi-Fi dependencies; no firmware source
+  changes were required.
+* Existing private setup access files and user settings were preserved. No firmware
+  uploaded and no physical hardware tests performed.
 
 ## Device switches and mock adapters — executed
 

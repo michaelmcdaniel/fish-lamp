@@ -1,15 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$arduinoCli = Get-Command arduino-cli -ErrorAction SilentlyContinue
-if (-not $arduinoCli) {
-    $installedCli = 'C:\Program Files\Arduino CLI\arduino-cli.exe'
-    if (-not (Test-Path -LiteralPath $installedCli)) {
-        throw 'arduino-cli was not found. See README.md for installation instructions.'
-    }
-    $arduinoCliPath = $installedCli
-} else {
-    $arduinoCliPath = $arduinoCli.Source
-}
+$arduinoCliPath = & "$PSScriptRoot\tools\find-arduino-cli.ps1"
 
 $projectDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 $buildDirectory = Join-Path $projectDirectory 'build'

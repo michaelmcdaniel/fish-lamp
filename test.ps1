@@ -1,6 +1,14 @@
-param([string]$ArduinoJson = "$env:USERPROFILE\OneDrive\Documents\Arduino\libraries\ArduinoJson\src")
+param([string]$ArduinoJson)
 $ErrorActionPreference = 'Stop'
+if (-not $ArduinoJson) {
+    $cli = & "$PSScriptRoot\tools\find-arduino-cli.ps1"
+    $sketchbookJson = & $cli config get directories.user --json
+    if ($LASTEXITCODE -ne 0) { throw 'Could not read Arduino CLI configuration.' }
+    $sketchbook = $sketchbookJson | ConvertFrom-Json
+    $ArduinoJson = Join-Path $sketchbook 'libraries\ArduinoJson\src'
+}
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+if (-not (Test-Path -LiteralPath $vswhere)) { throw 'Visual Studio C++ tools are required for host tests.' }
 $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if (-not $vs) { throw 'Visual Studio C++ tools are required for host tests.' }
 if (-not (Test-Path -LiteralPath "$ArduinoJson\ArduinoJson.h")) { throw 'Pass -ArduinoJson with the installed library src directory.' }

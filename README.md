@@ -11,7 +11,16 @@ been established. See [feature parity](docs/FEATURE-PARITY.md) and
 Verified dependencies: Arduino-Pico **6.0.0**, ArduinoJson **7.4.3**, and
 Adafruit NeoPixel **1.15.2**, and OneWire **2.3.8**. Arduino CLI can install missing libraries with
 `arduino-cli lib install "ArduinoJson@7.4.3" "Adafruit NeoPixel@1.15.2" "OneWire@2.3.8"`.
-The existing `build.ps1` and its board/flash selection are unchanged.
+The board/flash selection remains `rp2040:rp2040:rpipico2w:flash=4194304_262144`.
+
+On a new Windows x64 computer, run `./setup-tools.ps1` once with Internet access.
+It installs Arduino CLI **1.5.1** if missing (verifying the official archive's
+SHA-256 checksum), registers the [Arduino-Pico board index](https://arduino-pico.readthedocs.io/en/latest/install.html#installing-via-arduino-cli), and installs the exact core/library versions above.
+An existing CLI on PATH or in Program Files is reused. Otherwise the CLI goes in
+`%LOCALAPPDATA%\Programs\Arduino CLI`; build/test scripts find it automatically,
+without changing PATH. The board tools and libraries use Arduino's user directories.
+Re-running setup reuses installed dependencies. Visual Studio C++ tools are needed
+only for host tests, not for the firmware build.
 
 The private setup key has already been generated in this workspace. On a fresh
 checkout, first run `tools/new-setup-key.ps1` **once**. It creates ignored
@@ -20,6 +29,7 @@ the header rather than creating an open AP. Keep these files private and reuse
 them for subsequent builds. The generator never overwrites existing access files.
 
 ```powershell
+./setup-tools.ps1 # first-time toolchain installation
 ./build.ps1
 ./test.ps1
 ./tests/test-migration.ps1
@@ -28,13 +38,15 @@ them for subsequent builds. The generator never overwrites existing access files
 Where Windows blocks unsigned scripts, use a process-only override:
 
 ```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File ./setup-tools.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File ./build.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File ./test.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File ./tests/test-migration.ps1
 ```
 
 Host tests require Visual Studio C++ tools. `test.ps1` accepts `-ArduinoJson`
-with the library's `src` path if it is not in the default Documents location.
+with the library's `src` path to override automatic discovery from Arduino CLI's
+configured sketchbook directory.
 Generated firmware and native test binaries stay in ignored build directories.
 
 ## Configure on first boot

@@ -1,4 +1,5 @@
 #include "Config.h"
+#include "ZipCodes.h"
 #include <ArduinoJson.h>
 #include <cmath>
 #include <cstdlib>
@@ -107,6 +108,10 @@ bool parseConfig(const char* json, size_t length, Config& destination, int64_t* 
   }
   memcpy(c.wifiSsid, ssid, strlen(ssid)+1);
   memcpy(c.wifiPassword, password, passwordLength+1);
+  if(!optionalString(doc["zip-code"],5))return false;
+  const char* zip=doc["zip-code"] | "";
+  if(*zip && (!*ssid || !zipcodes::valid(zip)))return false;
+  memcpy(c.zipCode,zip,strlen(zip)+1);
   if (setupUtc) {
     if (!doc["setup-utc"].is<int64_t>()) return false;
     int64_t utc = doc["setup-utc"].as<int64_t>();
@@ -115,4 +120,11 @@ bool parseConfig(const char* json, size_t length, Config& destination, int64_t* 
   }
   destination = c;
   return true;
+}
+bool setConfigLocation(char* json,size_t& length,double latitude,double longitude,const char* source) {
+  BudgetAllocator allocator;JsonDocument doc(&allocator);
+  if(deserializeJson(doc,static_cast<const char*>(json),length,DeserializationOption::NestingLimit(4)))return false;
+  doc["latitude"]=latitude;doc["longitude"]=longitude;doc["location-source"]=source;
+  if(doc.overflowed() || measureJson(doc)>MaxConfigBytes)return false;
+  length=serializeJson(doc,json,MaxConfigBytes+1);return true;
 }

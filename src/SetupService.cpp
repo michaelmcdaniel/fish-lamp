@@ -2,6 +2,7 @@
 #include "SetupPage.h"
 #include "Devices.h"
 #include "MockDebug.h"
+#include "ZipCodes.h"
 #include <Arduino.h>
 #include <algorithm>
 #include <cstdio>
@@ -18,6 +19,8 @@ void SetupService::begin(const ConfigManager& settings) {
   }
 }
 void SetupService::startStation(const Config& candidate,State nextState) {
+  connected_=false;stationIp_[0]=0;
+  memcpy(stationSsid_,candidate.wifiSsid,sizeof(stationSsid_));
   dns_.stop(); dnsRunning_=false;
   // In Arduino-Pico 6.0/6.3, end() only disconnects STA. In AP mode,
   // beginNoBlock() otherwise starts another AP instead of joining the router.
@@ -30,11 +33,26 @@ void SetupService::startStation(const Config& candidate,State nextState) {
   state_=nextState; stateMs_=millis(); signalValid_=false;
   mockdebug::log("WiFi station start: status=%d mode=%d\r\n",result,int(WiFi.getMode()));
 }
+void SetupService::cacheNetwork(uint32_t now) {
+  const bool fresh=!connected_;connected_=true;
+  if(!devices::oled)return;
+  if(fresh || uint32_t(now-signalMs_)>=1000) {
+    signalDbm_=WiFi.RSSI();signalMs_=now;
+    signalValid_=signalDbm_>=-127 && signalDbm_<0;
+    const auto ip=WiFi.localIP();
+    snprintf(stationIp_,sizeof(stationIp_),"%u.%u.%u.%u",unsigned(ip[0]),unsigned(ip[1]),unsigned(ip[2]),unsigned(ip[3]));
+  }
+}
+bool SetupService::storeLocation(double latitude,double longitude,const char* source) {
+  if(!setConfigLocation(request_.body,request_.bodyLength,latitude,longitude,source))return false;
+  candidate_.latitude=latitude;candidate_.longitude=longitude;return true;
+}
 void SetupService::closeClient() {
   if (clientActive_) client_.stop(1); // Default stop can wait seconds for ACKs.
   client_ = WiFiClient(); clientActive_ = responding_ = false;
 }
 void SetupService::startAP(uint32_t now) {
+  zipLookup_.cancel();connected_=false;
   dns_.stop(); dnsRunning_=false;
   WiFi.disconnectAP();
   WiFi.end(); // Never depend on simultaneous station + AP operation.
@@ -93,9 +111,19 @@ void SetupService::handle(uint32_t now, ConfigManager& settings, TimeService& cl
       reply(400,"text/plain","Invalid settings. Check location, timezone, Wi-Fi password, offsets and 85 LED entries.",now); return;
     }
     submittedMs_=now;
+    needsZipLookup_=false;
+    if(*candidate_.wifiSsid && *candidate_.zipCode) {
+      double latitude,longitude;
+      const bool known=zipcodes::lookup(candidate_.zipCode,latitude,longitude);
+      if(!known){latitude=zipcodes::FallbackLatitude;longitude=zipcodes::FallbackLongitude;}
+      if(!storeLocation(latitude,longitude,known ? "compiled-zip" : "fallback")) {
+        reply(400,"text/plain","Location settings exceed configuration capacity.",now);return;
+      }
+      needsZipLookup_=!known;
+    }
     if (*candidate_.wifiSsid) {
       testAfterResponse_=true;
-      reply(202,"text/plain","Settings received. The setup network will disconnect while the lamp tests home Wi-Fi (up to 20 seconds). On success it saves and restarts. If FishLamp-Setup returns, reconnect and reload this page for the error; settings were not confirmed saved.",now);
+      reply(202,"text/plain","Settings received. The setup network will disconnect while the lamp tests home Wi-Fi (up to 20 seconds), then resolves location (up to 6 seconds). On success it saves and restarts. If FishLamp-Setup returns, reconnect and reload this page for the error; settings were not confirmed saved.",now);
     } else {
       commit(now,settings,clock);
       if (state_==State::Restart) reply(200,"text/plain",devices::rtc ?
@@ -118,17 +146,11 @@ void SetupService::tick(uint32_t now, ConfigManager& settings, TimeService& cloc
   }
   if (state_==State::StationConnecting || state_==State::StationOnline) {
     if (WiFi.getMode()==WIFI_STA && WiFi.status()==WL_CONNECTED) {
-      const bool justConnected = state_ != State::StationOnline;
       state_=State::StationOnline;
-      if(devices::oled && (justConnected || uint32_t(now-signalMs_)>=1000)) {
-        signalDbm_=WiFi.RSSI(); signalMs_=now;
-        // The installed CYW43 core returns -255 when RSSI is unavailable.
-        // Validation only affects diagnostics, never Wi-Fi connectivity.
-        signalValid_=signalDbm_ >= -127 && signalDbm_ < 0;
-      }
+      cacheNetwork(now);
     }
     else if (state_==State::StationOnline || uint32_t(now-stateMs_)>=20000) {
-      WiFi.end(); state_=State::StationRetry; stateMs_=now; signalValid_=false;
+      WiFi.end(); state_=State::StationRetry; stateMs_=now; signalValid_=false;connected_=false;
     }
     return;
   }
@@ -140,8 +162,9 @@ void SetupService::tick(uint32_t now, ConfigManager& settings, TimeService& cloc
   }
   if (state_==State::Testing) {
     if (WiFi.getMode()==WIFI_STA && WiFi.status()==WL_CONNECTED) {
-      commit(now,settings,clock);
-      if (state_!=State::Restart) fail(lastError_);
+      cacheNetwork(now);
+      if(needsZipLookup_){zipLookup_.begin(candidate_.zipCode,now);state_=State::ResolvingLocation;}
+      else {commit(now,settings,clock);if(state_!=State::Restart)fail(lastError_);}
     } else if (uint32_t(now-stateMs_)>=20000) {
       const int link=cyw43_wifi_link_status(&cyw43_state,CYW43_ITF_STA);
       mockdebug::log("WiFi test failed: status=%d link=%d mode=%d\r\n",int(WiFi.status()),link,int(WiFi.getMode()));
@@ -150,6 +173,17 @@ void SetupService::tick(uint32_t now, ConfigManager& settings, TimeService& cloc
       else if(link==CYW43_LINK_JOIN) fail("Wi-Fi joined but DHCP did not provide an address. Check router DHCP. Settings were not saved.");
       else fail("Could not connect to home Wi-Fi. Check the network and password. Settings were not saved.");
     }
+    return;
+  }
+  if(state_==State::ResolvingLocation) {
+    if(WiFi.getMode()!=WIFI_STA || WiFi.status()!=WL_CONNECTED) {
+      zipLookup_.cancel();connected_=false; // Keep fallback without another join attempt.
+    } else {cacheNetwork(now);if(!zipLookup_.tick(now))return;}
+    if(zipLookup_.found() && !storeLocation(zipLookup_.latitude(),zipLookup_.longitude(),"api-zip")) {
+      fail("Could not store resolved location. Settings were not saved.");return;
+    }
+    if(!zipLookup_.found())mockdebug::log("ZIP lookup unavailable; using configured fallback coordinates\r\n");
+    needsZipLookup_=false;commit(now,settings,clock);if(state_!=State::Restart)fail(lastError_);
     return;
   }
   if (state_==State::Restart && uint32_t(now-stateMs_)>=4000) {

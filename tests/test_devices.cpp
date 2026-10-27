@@ -71,6 +71,10 @@ int main() {
   fakeWrites=0;
   StatusLed led;led.begin();led.apply(true);auto ledWrites=fakeWrites;
   led.apply(true);assert(fakeWrites==ledWrites);
+  led.tick(250,true,false);if(devices::status)assert(fakeLevel==LOW);
+  led.tick(500,true,false);if(devices::status)assert(fakeLevel==HIGH);
+  led.tick(750,false,true);if(devices::status)assert(fakeLevel==HIGH);
+  led.tick(1000,false,false);if(devices::status)assert(fakeLevel==LOW);
   if(!devices::status) assert(fakeWrites==0);
   char bytes[4096];size_t n=mockdebug::take(bytes,sizeof(bytes));std::string log(bytes,n);
   if(!devices::strip) assert(log.find("mock pixel[0]=800000")!=std::string::npos);

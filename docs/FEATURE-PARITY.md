@@ -19,13 +19,14 @@ desktop checks, not hardware acceptance.
 | Water DS18B20 GPIO 26 | Async 750 ms conversion, minute sampling, CRC/family/range checks, last-valid snapshot, mock switch | One externally powered sensor; physical fault/reconnection tests pending |
 | Ambient GPIO 27 | 12-bit ADC normalized to 0–100%, independent 500 ms sampling, mock switch | Physical ADC validation pending |
 | Internal CPU temperature | Supported core internal ADC API, eight-sample average, mock switch | Separate Celsius reading; physical validation pending |
-| Status LED | On when config/time usable; mock switch | Physical indication pending |
+| Status LED | Blinks during station join, solid when connected, off during AP/retry/offline; mock switch | Physical indication pending |
 | OLED diagnostics | Optional SH1106 128×64, Wire1 GPIO 2/3, 500 ms cached status and ambient reading, changed-row bounded transfers, disable on I2C failure | Physical address/orientation/readability and fault timing checks pending; `FISH_LAMP_OLED=0` removes display support |
 | Device selection | Individual real/mock compile-time switches; external-device bench profile | Mock outputs use bounded debug queue; mock RTC resets at boot |
 | Wi-Fi station | Implemented nonblocking connection/retry states | Actual outage/reconnection timing tests pending |
 | Open provisioning AP | Owner requested password-free FishLamp-Setup; local mobile page, session token, test/save/restart | Intentional change from protected AP; physical association and restart tests pending |
 | Setup network discovery | Bounded pre-AP scan; native SSID dropdown plus Manual/None; fetch Refresh; status/count/error diagnostics | Refresh serves cached scan; physical scanning still pending |
-| Browser provisioning defaults | Browser clock and supported zone rules; normal-accuracy location request with Advanced overrides | HTTP geolocation restrictions need manual coordinates; non-US seasonal rules need review |
+| Browser provisioning defaults | Browser clock and supported zone rules; ZIP for Wi-Fi, coordinates for offline | Offline geolocation optional; non-US seasonal rules need review |
+| ZIP coordinates | Compiled 41,488-entry US table; bounded setup-only API for missing codes; explicit fallback and persisted coordinates | Dataset centroid accuracy, on-device DNS/HTTP timing and router behavior need commissioning |
 | Captive portal | Core wildcard DNS and bounded HTTP probe redirects to setup IP | OS controls popup; phone association/probe behavior pending on-device tests |
 | BOOTSEL setup request | Persisted on debounced hold, cancelled on release; held-through-power-loss flag forces setup on reboot | Actual button/power-cut timing pending; no firmware GPIO changes |
 | HTTP and Vue UI | Setup-only page implemented | Legacy normal-operation API and Vue UI remain deferred |

@@ -40,7 +40,7 @@ void loop() {
   const uint32_t now = millis();
   clockService.tick(now);
   sensors.tick(now);
-  statusLed.apply(settings.valid() && clockService.valid());
+  statusLed.tick(now,networking.connecting(),networking.connected());
   if (settings.valid() && clockService.valid() && !networking.restarting()) {
     schedule.tick(clockService.utc(), now, settings.config);
     lighting.apply(schedule.forceOff ? nullptr : schedule.dayOn ?

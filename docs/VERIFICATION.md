@@ -1,5 +1,41 @@
 # Verification record
 
+## Wi-Fi indicators and ZIP provisioning — 2026-10-27
+
+* Onboard LED uses a nonblocking 250 ms blink phase while joining and stays on
+  for a cached station connection. It is off in AP, offline and retry-wait states.
+  Real/mock adapter tests cover blink phases, steady connection and disconnect.
+* OLED network row cycles every five seconds through cached SSID, station IPv4
+  address and RSSI. Tests verify the complete cycle and no display-owned RSSI
+  reads. Long names scroll; unavailable RSSI and unsupported font characters are
+  explicitly represented. Other rows, including 500 ms ambient updates, remain.
+* Wi-Fi setup asks for a five-digit US ZIP; None instead shows required manual
+  coordinates and the optional browser-location button. Node tests verify field
+  visibility/required/disabled state, leading zeros, invalid ZIP rejection,
+  offline/online switching, browser clock/zone and permission failures.
+* Compiled GeoNames table contains 41,488 sorted US ZIP records, 497,856 bytes
+  of flash. Source, conversion, license and archive checksum are recorded in
+  `ZIP-DATA.md`; builds do not download data. Existing coordinate-only configs
+  remain valid under schema 1. Optional `zip-code` validation rejects malformed
+  codes, and setup saves resolved coordinates plus `location-source` through the
+  existing verified config replacement. Tests reload saved coordinates and
+  confirm imported lighting remains present.
+* Missing ZIPs use one asynchronous Zippopotam.us DNS/TCP/HTTP request, with a
+  six-second deadline, 4 KiB response cap and a 2 KiB JSON arena on Pico. Tests
+  cover fragmented/chunked replies, real response fields, invalid coordinates,
+  oversized replies, DNS/connect failure, timeout through millis wrap, late DNS
+  callbacks after cancellation, and the fallback 35.84562, -86.39027. A public
+  example request for ZIP 90210 returned HTTP 200 and expected coordinates from
+  the development computer; this does not establish on-device API connectivity.
+* `./test.ps1` passed **218,268 checks**, real/mock adapter suites and OLED
+  enabled/disabled suites. `node tests/test_setup_page.cjs` passed. Physical LED,
+  OLED readability, DNS/TCP timing, real router/Internet failure and watchdog
+  progress still need measurement on the Pico WH. No Pico 2 W build was run.
+* Final `./build-picowh.ps1` passed: **951,628 bytes flash**, **127,252 bytes
+  static RAM**, **134,892 bytes remaining**. Only dependency warnings from
+  Adafruit NeoPixel, Wi-Fi headers, OneWire and U8g2 appeared; no firmware-source
+  warnings or errors were emitted.
+
 ## Home Wi-Fi testing transition and readable errors — 2026-10-27
 
 * Installed Arduino-Pico 6.0.0/6.3.1 source inspection found that `WiFi.end()`

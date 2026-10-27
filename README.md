@@ -110,7 +110,7 @@ is how the module is strapped. Startup checks the configured address by ACK,
 not by assuming a particular address or scanning the RTC bus. Controller identity
 and the physical address still require on-device confirmation.
 
-After a short startup message, eight rows show Wi-Fi state/RSSI, RTC health/time,
+After a short startup message, eight rows show Wi-Fi state, RTC health/time,
 water temperature in °F, ambient percentage, applied grow output, RGB mode and
 brightness, uptime, and the last observed warning. `L` means configured local
 time; `Z` means UTC when settings are unavailable. `RTC FAIL` with a time means
@@ -121,7 +121,9 @@ an invented global brightness. `*` marks an RGB manual override; grow overrides
 are marked `MAN`. `Last:` retains the most recently observed warning after
 recovery; simultaneous faults have a deterministic display priority. Long warning
 messages cycle through numbered pages every three seconds. Setup failures also
-print their complete message to USB Serial. No SSID, password, setup key or endpoint is shown.
+print their complete message to USB Serial. When connected, the first row cycles
+every five seconds through SSID, IP address and RSSI in dBm. Long SSIDs scroll;
+unsupported font characters appear as `?`. No password, setup key or endpoint is shown.
 
 `StatusDisplay` observes existing state every 500 ms and sends only changed
 rows, one bounded I2C transaction per loop (16 framebuffer bytes per data chunk).
@@ -159,8 +161,9 @@ once per minute. CRC/family/range failures retain the last valid value and mark
 it unhealthy. Ambient percentage is sampled every **500 ms** on its own timer;
 averaged CPU temperature remains on the minute timer. The OLED uses the cached
 ambient reading at its 500 ms refresh cadence. `valid=0` means no usable reading; never interpret its numeric default
-as a measurement. The onboard status LED is on when configuration and time are
-usable. Normal-operation HTTP sensor reporting remains deferred.
+as a measurement. The onboard status LED blinks every 250 ms during a station
+connection attempt, stays on while connected, and is off in setup AP, retry-wait
+and offline modes. Normal-operation HTTP sensor reporting remains deferred.
 
 ### Provisioning steps
 
@@ -185,19 +188,17 @@ usable. Normal-operation HTTP sensor reporting remains deferred.
    The browser fills the current clock and its detected standard UTC offset/DST
    rule automatically for fixed-offset and US-rule zones. Other seasonal rules
    open Advanced for review; the firmware still supports `none` and `us` only.
-   **Advanced overrides** exposes coordinates, offset/rule and a UTC clock override.
-   Browser location is requested once with normal accuracy, accepting an already
-   available accurate or cached position rather than forcing a high-accuracy GPS
-   lookup. The request has an eight-second timeout. Browser geolocation requires
-   a secure context and permission: ordinary `http://192.168.4.1` setup normally
-   cannot obtain it, even at coarse accuracy. In that case Advanced opens with
-   coordinates left blank for manual entry; no location is fabricated or sent to
-   an external lookup service. Manually edited coordinates are never overwritten
-   by a late automatic result. Choose colors/brightness and schedule offsets.
+   **Advanced overrides** exposes offset/rule and a UTC clock override.
+   Home Wi-Fi asks for a five-digit **US ZIP code**; **None** instead shows
+   required latitude/longitude fields. Offline device-location lookup is optional
+   and starts only when its button is pressed, with normal accuracy and an
+   eight-second timeout. Ordinary HTTP setup normally blocks browser geolocation;
+   enter coordinates manually in that case. Choose colors/brightness and offsets.
    An optional local JSON import preserves per-pixel colors and schedule settings.
 4. Select **Save settings & restart**. For home Wi-Fi, the browser receives an
    acknowledgement before AP mode stops. The lamp attempts station connection
-   for up to 20 seconds. On success, it initializes/verifies the RTC, saves and
+   for up to 20 seconds. A missing compiled ZIP may add up to six seconds for a
+   location lookup. On success, it initializes/verifies the RTC, saves and
    verifies settings, then restarts. Offline mode skips the connection test and
    reports successful saving directly before restarting.
 5. If network testing, RTC verification or storage fails, setup remains available
@@ -209,6 +210,25 @@ station interface to DHCP, and accepts only a station connection as success.
 Failed tests distinguish authentication, missing 2.4 GHz network and DHCP errors
 when the radio provides that information. Read the numbered OLED error pages,
 USB Serial, or rejoin the setup AP to read the complete message in the browser.
+
+### ZIP coordinate lookup
+
+The firmware includes 41,488 US ZIP coordinates from the
+[GeoNames postal dataset](https://download.geonames.org/export/zip/), converted
+to integer coordinates at 0.00001-degree precision and searched in flash. These
+are approximate postal-area locations, not device GPS readings. See
+[ZIP data attribution](docs/ZIP-DATA.md). The table uses 497,856 bytes of flash
+and requires no filesystem download or runtime heap allocation.
+
+Only ZIPs missing from that table use the free
+[Zippopotam.us API](https://api.zippopotam.us/), after station connection. One
+asynchronous DNS/TCP/HTTP request has a six-second total deadline, a 4 KiB
+response limit, bounded JSON storage and no retries. This public-coordinate
+request sends only the ZIP and uses HTTP; it sends no Wi-Fi credentials. If the
+lookup fails, the saved location is **35.84562, -86.39027**. Network loss during
+lookup also saves this fallback. Location failure does not reject working Wi-Fi
+or stop lighting. Resolved/fallback coordinates persist in the existing verified
+config save, so subsequent boots do not query the API. Offline setup never queries it.
 
 After a successful restart, saved settings are loaded and lighting starts using
 the RTC. **Setup does not repeat on every power-up.** The AP is absent on a normal
@@ -304,6 +324,8 @@ These additional fields must be explicitly supplied:
 | `schema-version` | Integer `1` |
 | `rtc-utc-confirmed` | Boolean `true`, only after verifying RTC convention |
 | `latitude`, `longitude` | Numeric degrees, north/east positive |
+| `zip-code` | Optional five-digit US ZIP, only with home Wi-Fi; old files without it remain valid |
+| `location-source` | Setup records `manual`, `compiled-zip`, `api-zip` or `fallback` for the saved coordinates |
 | `timezone-offset-minutes` | Standard UTC offset, east positive, -720 through 840 |
 | `timezone-dst` | `none` or `us`; US rules from 2007 onward, not an IANA timezone database |
 

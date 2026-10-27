@@ -11,6 +11,7 @@ struct IPAddress {
   int bytes[4];
   IPAddress(int a,int b,int c,int d):bytes{a,b,c,d} {}
   bool isSet() const { return bytes[0] || bytes[1] || bytes[2] || bytes[3]; }
+  int operator[](unsigned i) const {return bytes[i];}
 };
 struct FakeSocket { std::string input,output; size_t read=0; bool live=true; int room=4096; unsigned stopWait=0; };
 struct WiFiClient {
@@ -81,5 +82,6 @@ struct FakeWiFi {
   }
   int status() { return modeValue==WIFI_AP && apRunning ? WL_CONNECTED : statusCode; }
   int32_t RSSI() { ++signalReads; return signal; }
+  IPAddress localIP() const {return IPAddress(192,0,2,42);}
 };
 inline FakeWiFi WiFi;

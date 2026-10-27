@@ -10,6 +10,8 @@ struct Config {
   double latitude = 0, longitude = 0;
   clockmath::Zone zone;
   char wifiSsid[33]{}, wifiPassword[65]{};
+  char zipCode[6]{}; // Optional US ZIP; existing coordinate-only settings remain valid.
 };
 // Failure never modifies destination. Credentials must never be logged.
 bool parseConfig(const char* json, size_t length, Config& destination, int64_t* setupUtc = nullptr);
+bool setConfigLocation(char* json,size_t& length,double latitude,double longitude,const char* source);

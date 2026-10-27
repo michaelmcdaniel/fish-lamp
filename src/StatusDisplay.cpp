@@ -25,6 +25,7 @@ const char* networkName(SetupService::State state) {
     case S::StationOnline: return "online";
     case S::StationRetry: return "offline/retry";
     case S::Scanning: return "scanning";
+    case S::ResolvingLocation: return "ZIP lookup";
   }
   return "unknown";
 }
@@ -94,7 +95,22 @@ void StatusDisplay::snapshot(uint32_t now, const ConfigManager& settings,
     const LightingController& lights, const SetupService& network,
     const SensorManager& sensors) {
   char lines[8][26]{};
-  if(network.signalValid()) snprintf(lines[0],26,"WiFi: online %lddBm",static_cast<long>(network.signalDbm()));
+  if(network.connected()) {
+    switch((uptimeSeconds_/5)%3) {
+      case 0: {
+        const char* name=network.ssid();size_t length=strlen(name);
+        size_t offset=length>20 ? (uptimeSeconds_%5)*(length-20)/4 : 0;
+        char safe[21]{};for(unsigned i=0;i<20 && name[offset+i];++i) {
+          unsigned char ch=static_cast<unsigned char>(name[offset+i]);safe[i]=ch>=32 && ch<127 ? char(ch) : '?';
+        }
+        snprintf(lines[0],26,"SSID %s",safe);break;
+      }
+      case 1: snprintf(lines[0],26,"IP %s",network.ipAddress());break;
+      default:
+        if(network.signalValid())snprintf(lines[0],26,"Signal %ld dBm",static_cast<long>(network.signalDbm()));
+        else snprintf(lines[0],26,"Signal unavailable");break;
+    }
+  }
   else if(network.state()==SetupService::State::StationOnline) snprintf(lines[0],26,"WiFi: online --dBm");
   else snprintf(lines[0],26,"WiFi: %s",networkName(network.state()));
 

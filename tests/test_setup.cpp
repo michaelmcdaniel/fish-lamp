@@ -5,6 +5,8 @@
 #include "LightingController.h"
 #include "SensorManager.h"
 #include "ScheduleController.h"
+#include "ZipCodes.h"
+#include <lwip/dns.h>
 #include <Bootsel.h>
 #include <LittleFS.h>
 #include <Wire.h>
@@ -12,6 +14,8 @@
 #include <ArduinoJson.h>
 #include <iostream>
 #include <cstdlib>
+#include <cmath>
+#include <vector>
 
 static unsigned assertions=0;
 #define REQUIRE(x) do{++assertions;if(!(x)){std::cerr<<"FAIL setup line "<<__LINE__<<": " #x "\n";std::exit(1);}}while(0)
@@ -52,8 +56,82 @@ static std::string token(SetupService& s,ConfigManager& c,TimeService& t) {
   auto value=d["token"].as<std::string>(); REQUIRE(value.size()==32);return value;
 }
 unsigned testSetup(const std::string& fixture) {
+  double zipLatitude=0,zipLongitude=0;
+  REQUIRE(zipcodes::lookup("90210",zipLatitude,zipLongitude));
+  REQUIRE(zipLatitude>34 && zipLatitude<35 && zipLongitude<-118 && zipLongitude>-119);
+  REQUIRE(zipcodes::lookup("01001",zipLatitude,zipLongitude)); // Leading zero retained.
+  REQUIRE(!zipcodes::lookup("00000",zipLatitude,zipLongitude));
+  for(const char* bad : {"1234","123456","12a45",""," 1234"})REQUIRE(!zipcodes::valid(bad));
+  const std::string place="{\"places\":[{\"latitude\":\"35.12\",\"longitude\":\"-86.45\"}]}";
+  const std::string response="HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n"+place;
+  {
+    std::string real="HTTP/1.0 200 OK\r\n\r\n{\"country\":\"United States\",\"country abbreviation\":\"US\",\"post code\":\"90210\",\"places\":[{\"place name\":\"Beverly Hills\",\"longitude\":\"-118.4065\",\"latitude\":\"34.0901\",\"state\":\"California\",\"state abbreviation\":\"CA\"}]}";
+    std::vector<char> bytes(real.begin(),real.end());bytes.push_back(0);
+    REQUIRE(ZipLookup::parseResponse(bytes.data(),real.size(),zipLatitude,zipLongitude));
+    REQUIRE(std::abs(zipLatitude-34.0901)<0.00001);
+  }
+  for(const std::string& data : {response,std::string("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n")+"3a\r\n"+place+"\r\n0\r\n\r\n"}) {
+    // Construct the exact chunk length rather than relying on fixture spelling.
+    std::string wire=data;if(wire.find("chunked")!=std::string::npos) {
+      char hex[16];snprintf(hex,sizeof(hex),"%x",unsigned(place.size()));wire.replace(wire.find("3a\r\n"),2,hex);
+    }
+    std::vector<char> bytes(wire.begin(),wire.end());bytes.push_back(0);
+    REQUIRE(ZipLookup::parseResponse(bytes.data(),wire.size(),zipLatitude,zipLongitude));
+    REQUIRE(std::abs(zipLatitude-35.12)<0.00001 && std::abs(zipLongitude+86.45)<0.00001);
+  }
+  for(const std::string& bad : {std::string("HTTP/1.0 404 Not Found\r\n\r\n")+place,
+      std::string("HTTP/1.0 200 OK\r\n\r\n{\"places\":[{\"latitude\":\"nan\",\"longitude\":0}]}"),
+      std::string("HTTP/1.0 200 OK\r\n\r\n{\"places\":[{\"latitude\":91,\"longitude\":0}]}"),
+      std::string("HTTP/1.0 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nfff\r\n{}")}) {
+    std::vector<char> bytes(bad.begin(),bad.end());bytes.push_back(0);
+    REQUIRE(!ZipLookup::parseResponse(bytes.data(),bad.size(),zipLatitude,zipLongitude));
+  }
+  {
+    ZipLookup lookup;lookup.begin("00000",0);REQUIRE(!lookup.tick(0));
+    fakeTcpReply(response);REQUIRE(lookup.tick(1) && lookup.found() && fakeTcp.aborted);
+    REQUIRE(std::abs(lookup.latitude()-35.12)<0.00001 && fakeTcp.request.find("GET /us/00000 ")!=std::string::npos);
+    lookup.begin("00000",0xffffff00u);REQUIRE(!lookup.tick(0xffffff00u));
+    REQUIRE(lookup.tick(uint32_t(0xffffff00u+6000)) && !lookup.found() && fakeTcp.aborted);
+    fakeDnsResult=ERR_INPROGRESS;lookup.begin("00000",0);lookup.cancel();
+    // A late DNS callback cannot touch cancelled storage or a new attempt.
+    ip_addr_t ip{};fakeDnsCallback("api.zippopotam.us",&ip,fakeDnsContext);fakeDnsResult=ERR_OK;
+    lookup.begin("00000",0);REQUIRE(!lookup.tick(0));
+    fakeTcpReply(std::string(4200,'x'));REQUIRE(lookup.tick(1) && !lookup.found());
+    fakeDnsResult=ERR_INPROGRESS;lookup.begin("00000",100);REQUIRE(!lookup.tick(6099));
+    REQUIRE(lookup.tick(6100) && !lookup.found());
+    fakeDnsCallback("api.zippopotam.us",nullptr,fakeDnsContext);fakeDnsResult=ERR_OK;
+    fakeTcpConnectResult=ERR_CONN;lookup.begin("00000",0);REQUIRE(lookup.tick(0) && !lookup.found());
+    fakeTcpConnectResult=ERR_OK;
+  }
   const std::string body=candidate(fixture), networkBody=candidate(fixture,true);
   Config parsed;int64_t utc=0;
+  for(const char* invalidZip : {"1234","12a45","123456"}) {
+    JsonDocument doc;deserializeJson(doc,networkBody);doc["zip-code"]=invalidZip;
+    std::string json;serializeJson(doc,json);REQUIRE(!parseConfig(json.data(),json.size(),parsed));
+  }
+  for(unsigned scenario=0;scenario<4;++scenario) {
+    resetHardware();ConfigManager zc;zc.begin();TimeService zt;zt.begin();SetupService zs;zs.begin(zc);pump(zs,zc,zt);
+    JsonDocument doc;deserializeJson(doc,networkBody);doc["zip-code"]=scenario==0 ? "90210" : "00000";
+    std::string json;serializeJson(doc,json);
+    fakeDnsResult=scenario==2 ? ERR_CONN : ERR_OK;
+    const auto queries=fakeZipDnsQueries;
+    exchange(zs,zc,zt,post(json,token(zs,zc,zt)));WiFi.statusCode=WL_CONNECTED;pump(zs,zc,zt);
+    if(scenario==0) {
+      REQUIRE(zs.restarting() && zc.valid() && zc.config.latitude>34 && zc.config.latitude<35);
+      REQUIRE(fakeZipDnsQueries==queries);
+    } else {
+      REQUIRE(zs.state()==SetupService::State::ResolvingLocation && !zc.valid());
+      pump(zs,zc,zt);
+      if(scenario==1){fakeTcpReply(response);pump(zs,zc,zt);}
+      if(scenario==3)pump(zs,zc,zt,6000);
+      REQUIRE(zs.restarting() && zc.valid());
+      REQUIRE(std::abs(zc.config.latitude-(scenario==1 ? 35.12 : zipcodes::FallbackLatitude))<0.00001);
+      REQUIRE(std::abs(zc.config.longitude-(scenario==1 ? -86.45 : zipcodes::FallbackLongitude))<0.00001);
+    }
+    ConfigManager restored;restored.begin();REQUIRE(restored.valid() && restored.config.latitude==zc.config.latitude);
+    REQUIRE(restored.config.lights[84].b==zc.config.lights[84].b);
+    fakeDnsResult=ERR_OK;
+  }
   REQUIRE(!parseConfig(fixture.data(),fixture.size(),parsed,&utc));
   REQUIRE(parseConfig(body.data(),body.size(),parsed,&utc));
   REQUIRE(utc==clockmath::midnight({2026,10,26}));
@@ -192,6 +270,20 @@ unsigned testSetup(const std::string& fixture) {
   REQUIRE(WiFi.getMode()==WIFI_STA && !WiFi.apRunning && !WiFi.stationStaticIP);
   WiFi.statusCode=WL_CONNECTED; // A fresh station attempt must actually reconnect.
   pump(station,nc,nt);REQUIRE(station.state()==SetupService::State::StationOnline);
+  REQUIRE(station.connected() && !station.connecting() && std::string(station.ipAddress())=="192.0.2.42");
+#if FISH_LAMP_OLED
+  {
+    Wire1=FakeWire{};StatusDisplay rotation;rotation.begin(0);
+    ScheduleController schedule;LightingController lighting;SensorManager sensors;
+    auto frame=[&](uint32_t now){rotation.tick(now,nc,nt,schedule,lighting,station,sensors);for(unsigned i=0;i<73;++i)rotation.tick(now,nc,nt,schedule,lighting,station,sensors);};
+    const auto reads=WiFi.signalReads;
+    frame(100);frame(1100);REQUIRE(fakeOledLines[0]=="SSID synthetic-network");
+    frame(5100);REQUIRE(fakeOledLines[0]=="IP 192.0.2.42");
+    frame(10100);REQUIRE(fakeOledLines[0]=="Signal -55 dBm");
+    frame(15100);REQUIRE(fakeOledLines[0]=="SSID synthetic-network");
+    REQUIRE(WiFi.signalReads==reads);
+  }
+#endif
   if(devices::oled) {
     REQUIRE(station.signalValid() && station.signalDbm()==-55);
     const unsigned rssiReads=WiFi.signalReads;

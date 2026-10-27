@@ -1,5 +1,35 @@
 # Verification record
 
+## OLED diagnostics — 2026-10-27
+
+* Confirmed Postal Clock's display class uses SH1106 128×64 with U8g2. Added
+  optional `StatusDisplay` with Wire1 GPIO 2/3, leaving RTC Wire GPIO 16/17 alone.
+  OLED-disabled compilation removes display I/O and its rendering dependency.
+* `./test.ps1` passed: **218,128 checks**, real/mock device-adapter suites, and
+  OLED-enabled/disabled suites. Display tests cover startup, fixed 25-character
+  rows, local time, stale/unavailable readings, applied brightness range, cached
+  row transfers, at most one I2C transaction per tick, RTC bus isolation, missing
+  display, mid-transfer failure/no retry, and millis wrap. RSSI tests cover cached
+  samples, unavailable values without rapid retries, and disconnect invalidation.
+  The fake renderer does not validate physical glyphs or orientation.
+* The assertion test initially exposed a display timezone units error (the
+  existing `offsetAt()` already returns seconds); corrected it. Also fixed the
+  host runner to propagate negative assertion-abort exit codes instead of hiding
+  them behind a later successful test.
+* Final Arduino-Pico **6.3.1** builds passed with U8g2 **2.36.19** enabled:
+  * Pico WH: **428,444 bytes flash**, **122,568 bytes static RAM**, 139,576 bytes
+    remaining for stack/heap. UF2: `build/picowh/fish-lamp.ino.uf2`.
+  * Pico 2 W: **421,096 bytes flash**, **125,052 bytes static RAM**, 399,236 bytes
+    remaining for stack/heap. UF2: `build/pico2w/fish-lamp.ino.uf2`.
+* The shared OneDrive U8g2 installation had unreadable cloud files. Used the
+  official Arduino U8g2-2.36.19 archive in ignored `build/dependencies/` with the
+  scripts' optional `-U8g2Path` argument; the shared installation was preserved.
+  Archive SHA-256: `c9de6e5a5aa2e2884d3296c6a86be4bc2770e27b11d4302ab5134273ccb6a670`.
+  Build warnings were in NeoPixel, OneWire, core Wi-Fi and an unused U8g2 driver.
+* No firmware upload or physical test performed. Display/controller identity,
+  actual address, readability, measured I2C/control timing, stuck-bus behavior
+  and the offline lighting soak test remain hardware acceptance work.
+
 ## New Windows computer toolchain — 2026-10-27
 
 * Installed Arduino CLI 1.5.1 in the user-local Programs directory after verifying
@@ -170,6 +200,17 @@ and observed output transitions. Keep credentials and private settings out of lo
    before disconnect/reboot, and reconnection. After remaining services are
    implemented, test DS18B20, DNS/NTP, telemetry and the legacy API/UI. No hardware
    result for any of these has been recorded yet.
+
+10. OLED commissioning (not yet performed): confirm SH1106 controller and 0x3C
+    or 0x3D address, SDA GPIO 2 / SCL GPIO 3 on Wire1, 3.3 V supply/pull-ups,
+    startup text and readable eight-row layout. Verify RTC on GPIO 16/17 continues
+    working. Compare displayed Fahrenheit, ambient percentage, applied grow state,
+    day/night/manual modes and per-pixel brightness range with Serial/state.
+    Disable Wi-Fi, unplug/reconnect water sensor and OLED, hold OLED SCL low,
+    and confirm bounded display failure with continuing lighting and watchdog
+    progress. Display recovery after a bus fault intentionally requires restart.
+    Measure actual maximum loop/transfer times and run the 24-hour offline test
+    with OLED enabled and disabled; host fakes cannot establish those results.
 
 Release gate: do not call this a reliable replacement appliance until the
 hardware checklist and deferred essential commissioning/services are complete.

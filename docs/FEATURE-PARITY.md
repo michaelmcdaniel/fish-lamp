@@ -20,6 +20,7 @@ desktop checks, not hardware acceptance.
 | Ambient GPIO 27 | 12-bit ADC normalized to 0–100%, mock switch | Physical ADC validation pending |
 | Internal CPU temperature | Supported core internal ADC API, eight-sample average, mock switch | Separate Celsius reading; physical validation pending |
 | Status LED | On when config/time usable; mock switch | Physical indication pending |
+| OLED diagnostics | Optional SH1106 128×64, Wire1 GPIO 2/3, one-second cached status, changed-row bounded transfers, disable on I2C failure | Physical address/orientation/readability and fault timing checks pending; `FISH_LAMP_OLED=0` removes display support |
 | Device selection | Individual real/mock compile-time switches; external-device bench profile | Mock outputs use bounded debug queue; mock RTC resets at boot |
 | Wi-Fi station | Implemented nonblocking connection/retry states | Actual outage/reconnection timing tests pending |
 | Protected provisioning AP | Implemented for missing/invalid config, local mobile page, test/save/restart | Private per-build key; physical AP and restart tests pending |

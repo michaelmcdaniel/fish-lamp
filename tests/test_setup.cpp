@@ -1,4 +1,5 @@
 #include "SetupService.h"
+#include "Devices.h"
 #include <LittleFS.h>
 #include <Wire.h>
 #include <Arduino.h>
@@ -143,7 +144,19 @@ unsigned testSetup(const std::string& fixture) {
   REQUIRE(nc.valid() && ns.restarting());
   SetupService station;station.begin(nc);REQUIRE(station.state()==SetupService::State::StationConnecting);
   pump(station,nc,nt);REQUIRE(station.state()==SetupService::State::StationOnline);
+  if(devices::oled) {
+    REQUIRE(station.signalValid() && station.signalDbm()==-55);
+    const unsigned rssiReads=WiFi.signalReads;
+    pump(station,nc,nt,999);REQUIRE(WiFi.signalReads==rssiReads);
+    WiFi.signal=-67;pump(station,nc,nt);
+    REQUIRE(WiFi.signalReads==rssiReads+1 && station.signalDbm()==-67);
+    WiFi.signal=-255;pump(station,nc,nt,1000);
+    REQUIRE(!station.signalValid() && station.state()==SetupService::State::StationOnline);
+    const unsigned unavailableReads=WiFi.signalReads;
+    pump(station,nc,nt,999);REQUIRE(WiFi.signalReads==unavailableReads);
+  } else REQUIRE(WiFi.signalReads==0 && !station.signalValid());
   WiFi.statusCode=0;pump(station,nc,nt);REQUIRE(station.state()==SetupService::State::StationRetry && nc.valid());
+  REQUIRE(!station.signalValid());
   pump(station,nc,nt,60000);REQUIRE(station.state()==SetupService::State::StationConnecting);
 
   resetHardware();ConfigManager sc;sc.begin();TimeService st;st.begin();SetupService slow;slow.begin(sc);pump(slow,sc,st);

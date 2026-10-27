@@ -43,11 +43,14 @@ struct FakeWiFi {
   bool apOK=true, protectedAP=false;
   unsigned starts=0, ends=0, stationAttempts=0;
   int statusCode=0;
+  int32_t signal=-55;
+  unsigned signalReads=0;
   void setTimeout(unsigned) {}
   void end() { ++ends; statusCode=0; }
   void softAPConfig(IPAddress,IPAddress,IPAddress) {}
   bool softAP(const char*,const char* password) { ++starts; protectedAP=password && strlen(password)>=8; return apOK; }
   void beginNoBlock(const char*,const char*) { ++stationAttempts; }
   int status() { return statusCode; }
+  int32_t RSSI() { ++signalReads; return signal; }
 };
 inline FakeWiFi WiFi;

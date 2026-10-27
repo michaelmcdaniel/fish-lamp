@@ -13,6 +13,9 @@ class SetupService {
   void tick(uint32_t now, ConfigManager& settings, TimeService& clock);
   State state() const { return state_; }
   bool restarting() const { return state_ == State::Restart; }
+  bool signalValid() const { return state_ == State::StationOnline && signalValid_; }
+  int32_t signalDbm() const { return signalDbm_; }
+  const char* lastError() const { return lastError_; } // Fixed diagnostic messages only.
  private:
   void startAP(uint32_t now);
   void closeClient();
@@ -32,5 +35,8 @@ class SetupService {
   char token_[33]{}, session_[256]{}, header_[256]{};
   const char* response_ = nullptr;
   const char* lastError_ = "";
+  bool signalValid_ = false;
+  int32_t signalDbm_ = 0;
+  uint32_t signalMs_ = 0;
   size_t headerLength_ = 0, responseLength_ = 0, sent_ = 0;
 };

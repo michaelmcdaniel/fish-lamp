@@ -102,9 +102,18 @@ void SetupService::tick(uint32_t now, ConfigManager& settings, TimeService& cloc
     return;
   }
   if (state_==State::StationConnecting || state_==State::StationOnline) {
-    if (WiFi.status()==WL_CONNECTED) state_=State::StationOnline;
+    if (WiFi.status()==WL_CONNECTED) {
+      const bool justConnected = state_ != State::StationOnline;
+      state_=State::StationOnline;
+      if(devices::oled && (justConnected || uint32_t(now-signalMs_)>=1000)) {
+        signalDbm_=WiFi.RSSI(); signalMs_=now;
+        // The installed CYW43 core returns -255 when RSSI is unavailable.
+        // Validation only affects diagnostics, never Wi-Fi connectivity.
+        signalValid_=signalDbm_ >= -127 && signalDbm_ < 0;
+      }
+    }
     else if (state_==State::StationOnline || uint32_t(now-stateMs_)>=20000) {
-      WiFi.end(); state_=State::StationRetry; stateMs_=now;
+      WiFi.end(); state_=State::StationRetry; stateMs_=now; signalValid_=false;
     }
     return;
   }

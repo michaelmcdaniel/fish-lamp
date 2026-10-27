@@ -8,6 +8,7 @@
 #include "src/SetupService.h"
 #include "src/SensorManager.h"
 #include "src/StatusLed.h"
+#include "src/StatusDisplay.h"
 
 LightingController lighting;
 TimeService clockService;
@@ -17,6 +18,7 @@ Diagnostics diagnostics;
 SetupService networking;
 SensorManager sensors;
 StatusLed statusLed;
+StatusDisplay statusDisplay;
 
 void setup() {
   lighting.begin();
@@ -27,6 +29,7 @@ void setup() {
   sensors.begin();
   statusLed.begin();
   diagnostics.begin();
+  statusDisplay.begin(millis());
   networking.begin(settings);
 }
 
@@ -45,6 +48,9 @@ void loop() {
   }
   // Only essential control progress feeds the hardware watchdog.
   rp2040.wdt_reset();
-  diagnostics.tick(now, micros() - started, settings, clockService, schedule, lighting, int(networking.state()), sensors);
+  const uint32_t controlUs = micros() - started;
+  // Observe this applied control snapshot before Serial/setup can change it.
+  statusDisplay.tick(millis(), settings, clockService, schedule, lighting, networking, sensors);
+  diagnostics.tick(now, controlUs, settings, clockService, schedule, lighting, int(networking.state()), sensors);
   networking.tick(millis(), settings, clockService);
 }

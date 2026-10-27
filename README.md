@@ -9,8 +9,9 @@ been established. See [feature parity](docs/FEATURE-PARITY.md) and
 ## Build and tests
 
 Verified dependencies: Arduino-Pico **6.0.0**, ArduinoJson **7.4.3**, and
-Adafruit NeoPixel **1.15.2**, and OneWire **2.3.8**. Arduino CLI can install missing libraries with
-`arduino-cli lib install "ArduinoJson@7.4.3" "Adafruit NeoPixel@1.15.2" "OneWire@2.3.8"`.
+Adafruit NeoPixel **1.15.2**, OneWire **2.3.8**, and U8g2 **2.36.19** (OLED).
+Arduino CLI can install missing libraries with
+`arduino-cli lib install "ArduinoJson@7.4.3" "Adafruit NeoPixel@1.15.2" "OneWire@2.3.8" "U8g2@2.36.19"`.
 `build-pico2w.ps1` targets Pico 2 W: `rp2040:rp2040:rpipico2w:flash=4194304_262144`.
 `build-picowh.ps1` targets Pico WH using `rp2040:rp2040:rpipicow:flash=2097152_262144`:
 2 MB flash with 256 KiB reserved for LittleFS. Its upload file is
@@ -73,6 +74,7 @@ that profile: **1 = real, 0 = mock**. These are firmware settings, not saved JSO
 | `FISH_LAMP_CPU_TEMP` | Internal ADC temperature: `mockCpuC`, initially 30 °C |
 | `FISH_LAMP_STATUS_LED` | Onboard LED: logs on/off changes |
 | `FISH_LAMP_WIFI` | Reports disabled/disconnected; no application scans, AP or station connections |
+| `FISH_LAMP_OLED` | 0 disables the OLED completely; no buffer, library requirement or display I2C access |
 
 Mock RTC defaults to 2026-01-01 12:00 UTC at **every restart**, including after
 setup. Change `mockRtcUtc` to exercise a particular schedule date/time. A setup
@@ -82,6 +84,63 @@ Keep Wi-Fi enabled to configure a blank Pico. With Wi-Fi mocked, valid settings
 must already exist in LittleFS or lights remain safely off. The core may still
 initialize its onboard radio; the switch disables application networking.
 Flash storage, USB Serial, watchdog and the Pico itself remain real.
+
+### Optional OLED diagnostics
+
+The display matches [Postal Clock's driver](https://github.com/michaelmcdaniel/postal-clock/blob/main/display.h):
+a **SH1106 128×64** 1.3-inch I2C OLED, and uses
+U8g2 for its static framebuffer and 5×8 font. It is enabled by default with
+`FISH_LAMP_OLED=1`, independently of the bench profile. Set it to 0 in
+`src/Devices.h` to build without the display or U8g2 dependency.
+
+| OLED connection | Pico W/WH or Pico 2 W |
+|---|---|
+| SDA | GPIO 2 (physical pin 4) |
+| SCL | GPIO 3 (physical pin 5) |
+| VCC | 3V3 (OUT), physical pin 36; use a 3.3 V compatible module |
+| GND | GND, for example physical pin 3 |
+
+The OLED uses **Wire1 / I2C1**. The DS3231 remains on **Wire / I2C0, GPIO 16/17**;
+the display never reinitializes the RTC bus. Pull-ups must go to 3.3 V.
+GPIO 0/1 cannot provide a second independent hardware bus alongside the RTC's
+GPIO 16/17. OLED pins and its **7-bit** address are centralized in `src/Devices.h`.
+The default address is **0x3C**; change `devices::oledAddress` to **0x3D** if that
+is how the module is strapped. Startup checks the configured address by ACK,
+not by assuming a particular address or scanning the RTC bus. Controller identity
+and the physical address still require on-device confirmation.
+
+After a short startup message, eight rows show Wi-Fi state/RSSI, RTC health/time,
+water temperature in °F, ambient percentage, applied grow output, RGB mode and
+brightness, uptime, and the last observed warning. `L` means configured local
+time; `Z` means UTC when settings are unavailable. `RTC FAIL` with a time means
+the software clock is preserving the last validated time. `MOCK`/`M` identifies
+simulated devices and `STALE` identifies retained readings after a failed sample.
+RGB `B:min-max` is the **applied per-pixel brightness range, 0–255**, rather than
+an invented global brightness. `*` marks an RGB manual override; grow overrides
+are marked `MAN`. `Last:` retains the most recently observed warning after
+recovery; simultaneous faults have a deterministic display priority. Long warning
+messages are truncated to fit. No SSID, password, setup key or endpoint is shown.
+
+`StatusDisplay` observes existing state once per second and sends only changed
+rows, one bounded I2C transaction per loop (16 framebuffer bytes per data chunk).
+Initialization waits use `millis()`, with no `delay()` or full-frame `sendBuffer()`.
+The OLED bus uses 100 kHz and a 5 ms transaction timeout. A missing OLED, NACK or
+transfer error disables display I/O until restart and queues one Serial warning;
+it never retries forever or changes lamp state. Disabling the display also stops
+RSSI sampling added for it. Actual bus timings, glyph layout/orientation, address,
+and operation with a disconnected/stuck OLED must be checked on hardware.
+
+If OneDrive leaves the installed U8g2 source files unreadable, extract the official
+U8g2 2.36.19 Arduino library archive into `build/dependencies/`, then select that
+local copy without replacing the shared installation:
+
+```powershell
+./build-picowh.ps1 -U8g2Path ./build/dependencies/U8g2-2.36.19
+./build-pico2w.ps1 -U8g2Path ./build/dependencies/U8g2-2.36.19
+```
+
+Use `src/Devices.h` for switches and pin edits; generated copies under build
+directories are overwritten by Arduino CLI.
 
 Open Serial Monitor at 115200 for `mock ...` output and periodic sensor snapshots.
 Output requests are logged on changes, not every tick. Logs use a fixed 4 KiB

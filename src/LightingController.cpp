@@ -25,9 +25,13 @@ void LightingController::apply(const Pixel* pixels, bool growOn) {
     lastAppliedMs = millis();
   }
   if (!ready_) return;
+  minBrightness_ = pixels ? 255 : 0;
+  maxBrightness_ = 0;
   bool changed = false;
   for (unsigned i = 0; i < PixelCount; ++i) {
     const Pixel p = pixels ? pixels[i] : Pixel{0, 0, 0, 0};
+    if(p.brightness < minBrightness_) minBrightness_ = p.brightness;
+    if(p.brightness > maxBrightness_) maxBrightness_ = p.brightness;
     const uint32_t color = Adafruit_NeoPixel::Color(
         (uint16_t(p.r) * p.brightness + 127) / 255,
         (uint16_t(p.g) * p.brightness + 127) / 255,

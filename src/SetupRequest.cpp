@@ -1,7 +1,8 @@
 #include "SetupRequest.h"
 #include <cstring>
 
-void SetupRequest::reset() {
+void SetupRequest::reset(bool station) {
+  station_=station;
   memset(headers_,0,sizeof(headers_)); memset(body,0,sizeof(body)); memset(token,0,sizeof(token));
   headerLength_ = expected_ = bodyLength = 0;
   headersDone_ = complete = false; error = 0; route = Route::NotFound;
@@ -25,7 +26,10 @@ void SetupRequest::parseHeaders() {
     const char* path=headers_+4;
     route=!strcmp(path,"/") ? Route::Page : !strcmp(path,"/session") ? Route::Session :
           !strcmp(path,"/networks") ? Route::Networks : Route::Redirect;
+    if(station_) route=!strcmp(path,"/") ? Route::Page :
+      (!strcmp(path,"/status") || !strcmp(path,"/api/status")) ? Route::Status : Route::NotFound;
   } else if (!strcmp(headers_,"POST /configure HTTP/1.1")) route=Route::Configure;
+  if(station_ && !get) {error=405;return;}
   bool lengthSeen=false, typeSeen=false, tokenSeen=false, hostSeen=false;
   for (char* line = lineEnd+2; *line; line = lineEnd+2) {
     lineEnd = strstr(line,"\r\n");
@@ -41,14 +45,14 @@ void SetupRequest::parseHeaders() {
     if (same(line,"transfer-encoding")) { error=400; return; }
     if (same(line,"host")) {
       if (hostSeen || !*value) { error=400; return; }
-      if(strcmp(value,"192.168.4.1") && strcmp(value,"192.168.4.1:80")) {
+      if(!station_ && strcmp(value,"192.168.4.1") && strcmp(value,"192.168.4.1:80")) {
         if(!get) {error=400;return;}
         // Never serve tokens or APIs under captive-probe/foreign hostnames.
         route=Route::Redirect;
       }
       hostSeen=true;
     } else if (same(line,"origin")) {
-      if (strcmp(value,"http://192.168.4.1") && strcmp(value,"http://192.168.4.1:80")) { error=403; return; }
+      if (!station_ && strcmp(value,"http://192.168.4.1") && strcmp(value,"http://192.168.4.1:80")) { error=403; return; }
     } else if (same(line,"content-length")) {
       if (lengthSeen || !*value) { error=400; return; }
       lengthSeen=true;

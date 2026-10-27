@@ -35,7 +35,6 @@ void SetupService::startStation(const Config& candidate,State nextState) {
 }
 void SetupService::cacheNetwork(uint32_t now) {
   const bool fresh=!connected_;connected_=true;
-  if(!devices::oled)return;
   if(fresh || uint32_t(now-signalMs_)>=1000) {
     signalDbm_=WiFi.RSSI();signalMs_=now;
     signalValid_=signalDbm_>=-127 && signalDbm_<0;

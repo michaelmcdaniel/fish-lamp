@@ -387,7 +387,7 @@ installed core's reset reason enum. `network` reports: 0 disabled, 1 starting AP
  6 station connecting, 7 station connected, 8 station retry, 9 scanning. No credentials or
 configuration values print.
 
-HTTP port 80 serves setup only: `GET /`, `GET /session`, `GET /networks`,
+In setup mode HTTP port 80 serves `GET /`, `GET /session`, `GET /networks`,
 `POST /configure`. Network discovery uses a fixed-capacity CYW43 callback and
 finishes station scanning before starting the AP; AP+STA is not required.
 Requests require the fixed AP host and a session token for configuration changes;
@@ -395,4 +395,43 @@ foreign origins and chunked/ambiguous body framing are rejected. One request is
 serviced at a time, with a listen backlog of one, 2 KiB headers, 16 KiB bodies,
 256-byte per-tick receive/send budgets, a 2-second inactivity limit and 15-second
 total limit. Client writes use a 5 ms timeout; close uses a 1 ms ACK wait. No
-AP+STA overlap is used. The legacy normal-operation API/UI is still deferred.
+AP+STA overlap is used.
+
+## Connected dashboard
+
+After station Wi-Fi connects, open `http://<lamp-ip>/` (the IP appears on the
+OLED). A locally bundled, mobile-friendly dashboard polls `GET /status` using
+`fetch` every three seconds after the previous request finishes. `/api/status`
+is an alias. No CDN, Internet connectivity check, DNS lookup, or NTP response is
+required to serve it. HTTP stops on Wi-Fi loss and starts again on reconnect;
+offline control continues independently. This page is read-only.
+
+The page shows water °F, CPU °C, ambient %, last-reading ages, health/mock
+indicators, RTC health/time, SSID, IP and RSSI, all 85 daytime and nighttime
+`[red,green,blue,brightness]` entries, RGB mode, applied grow output, offsets,
+upcoming on/off transitions and manual override expiry. Failed polls retain the
+last display with an explicit stale warning. Times use the lamp's configured
+timezone, including the offset at each event rather than the phone's timezone.
+
+The JSON retains `lightsOn` (day mode), `growlightOn`, `lights`, `schedule`,
+`growlightDelay`, `lightsDelay`, `waterTemp` and `ambient`. Added fields include
+`nightlights`, `rgbMode`, `sensors`, `wifi`, `zone` and validity flags. Numeric
+times are **Unix UTC seconds**; delay fields are override expiry epochs or zero.
+`schedule.lightsOn/lightsOff/growlightOn/growlightOff` now mean the next future
+automatic transitions in the controller's cached yesterday/today/tomorrow
+windows. Overlapping windows are merged for these transitions. Unknown times
+(including polar no-sunrise dates or missing valid time) are `null`, never
+fabricated dates. RGB off switches to night settings unless force-off is active.
+Overrides are shown separately from the automatic plan. Sensor `value` is the
+last valid reading or `null`; `healthy=false` marks a failed subsequent attempt.
+No passwords or telemetry URLs are returned. SSID/IP are intentionally visible
+to clients on the local network. Legacy HTTP editing/control/log routes and
+the original Vue UI remain deferred.
+
+Dashboard serving uses one active client and backlog one, 2 KiB headers,
+127-character request lines, no request bodies, 256-byte I/O steps, a 5 ms write
+timeout, 1 ms close wait, 2-second inactivity and 10-second total client limits.
+A fixed 10 KiB response buffer holds one immutable status snapshot per request;
+JSON construction has fixed field/pixel counts and never writes settings.
+The setup parser is reused with a read-only station routing mode. Hardware
+measurements of worst-case snapshot/write latency and heap behavior remain due.

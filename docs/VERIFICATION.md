@@ -345,5 +345,23 @@ and observed output transitions. Keep credentials and private settings out of lo
     Measure actual maximum loop/transfer times and run the 24-hour offline test
     with OLED enabled and disabled; host fakes cannot establish those results.
 
+## Connected dashboard checks
+
+Host coverage: station connect/reconnect, `/` and both status URLs, 85 day/night
+arrays, JSON escaping and password exclusion, stale/invalid sensor values,
+invalid clock, unsupported methods/routes, oversized headers, request bodies,
+stalled readers/writers, and continued scheduling during HTTP faults. Run
+`./test.ps1` and `node tests/test_dashboard_page.cjs`; the latter executes the
+embedded script against DOM/fetch stand-ins, including stale polling recovery
+and future events across both US DST transitions. It is not browser visual QA.
+
+On device: visit the shown station IP on a phone; compare every sensor and both
+LED arrays with Serial/configuration, observe an actual day/night/grow boundary,
+exercise manual overrides via Serial, then stop Wi-Fi during polling. Confirm
+stale UI, continued outputs, reconnect/reload recovery and no watchdog resets.
+Test a client that trickles headers and a client that never reads its response;
+measure maximum complete loop time (including web work), snapshot latency and
+heap trends during prolonged polling. These hardware checks remain unperformed.
+
 Release gate: do not call this a reliable replacement appliance until the
 hardware checklist and deferred essential commissioning/services are complete.

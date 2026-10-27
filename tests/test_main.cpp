@@ -15,6 +15,7 @@
 
 using namespace clockmath;
 unsigned testSetup(const std::string& fixture);
+unsigned testWeb(const std::string& fixture);
 static unsigned checks = 0;
 #define CHECK(x) do { ++checks; if (!(x)) { std::cerr << "FAIL line " << __LINE__ << ": " #x "\n"; return 1; } } while (0)
 static std::string fixture() {
@@ -180,6 +181,7 @@ int main(int argc, char** argv) {
   auto tomorrow = solarSchedule({2026,3,21},0,0,{}, c.lightsOffsets, c.growOffsets);
   overnight.tick(day+23*3600,0,c);
   CHECK(tomorrow.lights.contains(day+23*3600) && overnight.dayOn);
+  checks += testWeb(good);
   checks += testSetup(good);
   std::cout << checks << " checks passed\n";
 }

@@ -29,19 +29,21 @@ desktop checks, not hardware acceptance.
 | ZIP coordinates | Compiled 41,488-entry US table; bounded setup-only API for missing codes; explicit fallback and persisted coordinates | Dataset centroid accuracy, on-device DNS/HTTP timing and router behavior need commissioning |
 | Captive portal | Core wildcard DNS and bounded HTTP probe redirects to setup IP | OS controls popup; phone association/probe behavior pending on-device tests |
 | BOOTSEL setup request | Persisted on debounced hold, cancelled on release; held-through-power-loss flag forces setup on reboot | Actual button/power-cut timing pending; no firmware GPIO changes |
-| HTTP and Vue UI | Setup-only page implemented | Legacy normal-operation API and Vue UI remain deferred |
+| HTTP dashboard | Local polling page and `/status` (`/api/status` alias), all sensors, day/night pixels, next transitions, grow output, Wi-Fi and RTC health | Read-only replacement UI; legacy mutation/log routes remain deferred; on-device validation pending |
 | Telemetry POST | Deferred | Preserve Fahrenheit `temperature`; document that humidity/pressure were placeholders |
 | Watchdog and diagnostics | Implemented | USB snapshot, reset cause, progress timings; fault-injection hardware tests pending |
 
-Deferred normal-operation HTTP contract: legacy `GET /`, `/status`, `/lights/on`, `/lights/off`,
+Deferred normal-operation HTTP contract: legacy `/lights/on`, `/lights/off`,
 `/lights/brightness/{value}`, `/lights/{index}/{hexcolor}`,
 `/lights/{start}-{end}/{hexcolor}`, `/lights/{hexcolor}`, `/grow-light/on`,
 `/grow-light/off`, `/grow-light`, `/log/temp[/on|/off]`, and
-`/log/schedule[/on|/off]`. Future `/status` must retain `lightsOn`, `growlightOn`,
+`/log/schedule[/on|/off]`. Implemented `/status` retains `lightsOn`, `growlightOn`,
 `lights`, `schedule`, `growlightDelay`, `lightsDelay`, `waterTemp`, and `ambient`.
-The setup page is a new locally served interface, not the legacy Vue page. Its
+Both setup and dashboard pages are locally served replacements for the legacy Vue page. The setup
 mobile browser submission was tested against a local preview server; physical
-AP serving remains unverified. Normal-operation browser compatibility is deferred.
+AP serving remains unverified. Dashboard script tests use a DOM/fetch stand-in;
+physical HTTP serving and visual browser verification remain pending. See README
+for intentional timestamp/next-transition semantics and null/stale fields.
 
 ## Observed legacy defects not copied
 

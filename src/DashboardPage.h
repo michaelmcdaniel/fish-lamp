@@ -1,0 +1,32 @@
+#pragma once
+static const char DashboardPage[] = R"HTML(<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fish Lamp</title><style>
+:root{color-scheme:dark;font:16px system-ui;background:#081b23;color:#e4f2ef}body{max-width:1100px;margin:auto;padding:24px}h1{margin-bottom:4px}h2{font-size:1.2rem}h3{font-size:1rem;color:#9edbd0}p{line-height:1.6}.muted{color:#aec4c8}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}section{background:#102c36;border:1px solid #28505a;border-radius:14px;padding:18px;margin:16px 0}.grid section{margin:0}dl{display:grid;grid-template-columns:1fr 1fr;gap:12px}dd{margin:0;overflow-wrap:anywhere}dt{color:#aec4c8}.scroll{max-height:340px;overflow:auto}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}th,td{text-align:left;padding:7px;border-bottom:1px solid #28505a}th{position:sticky;top:0;background:#102c36}.swatch{display:inline-block;width:22px;height:14px;border:1px solid #aec4c8;border-radius:3px;margin-right:8px}#connection{color:#8ee4c1}#connection.failed{color:#ffbf94}small{color:#aec4c8}summary{cursor:pointer}
+</style><body><h1>Fish Lamp</h1><div class="muted">Aquarium &amp; grow light monitor</div>
+<p id="connection" role="status" aria-live="polite">Connecting to lamp…</p>
+<div class="grid"><section><h2>Sensors</h2><div id="sensors">Waiting for readings…</div></section>
+<section><h2>Wi-Fi &amp; clock</h2><dl id="wifi"></dl></section></div>
+<div class="grid"><section><h2>Aquarium LEDs</h2><dl id="rgb"></dl><small>Day switches to night settings at the scheduled off time. Force-off disables both.</small></section>
+<section><h2>Grow light</h2><dl id="grow"></dl><small>Times use the lamp’s configured timezone. Schedule transitions are independent of manual override expiry.</small></section></div>
+<section><h2>LED settings</h2><p class="muted">85 pixels · RGB and per-pixel brightness, 0–255. Swatches include brightness.</p>
+<div class="grid"><div><h3>Daytime</h3><div class="scroll"><table><thead><tr><th>LED</th><th>RGB</th><th>Brightness</th></tr></thead><tbody id="day"></tbody></table></div></div>
+<div><h3>Nighttime</h3><div class="scroll"><table><thead><tr><th>LED</th><th>RGB</th><th>Brightness</th></tr></thead><tbody id="night"></tbody></table></div></div></div></section>
+<script>
+'use strict';
+const el=id=>document.getElementById(id);
+function pairs(id,items){const box=el(id);box.replaceChildren();for(const [name,value]of items){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=name;dd.textContent=value;box.append(dt,dd);}}
+function time(value,d){if(!value)return 'Unavailable';const offset=d.timezoneOffsetSeconds;const stamp=new Date(value*1000);/* Calculate US DST at the event, including tomorrow's transition. */let eventOffset=offset;
+if(d.zone){let base=d.zone.offsetMinutes*60;eventOffset=base;if(d.zone.usDst){const y=stamp.getUTCFullYear();const sunday=(month,ordinal)=>{const first=new Date(Date.UTC(y,month,1));return 1+(7-first.getUTCDay())%7+7*(ordinal-1);};const start=Date.UTC(y,2,sunday(2,2),2)-base*1000,end=Date.UTC(y,10,sunday(10,1),2)-(base+3600)*1000;if(value*1000>=start&&value*1000<end)eventOffset+=3600;}}
+return new Date((value+eventOffset)*1000).toISOString().slice(0,19).replace('T',' ')+' (UTC'+(eventOffset<0?'−':'+')+String(Math.floor(Math.abs(eventOffset)/3600)).padStart(2,'0')+':'+String(Math.abs(eventOffset)/60%60).padStart(2,'0')+')';}
+let previousDay='',previousNight='';
+function leds(id,rows){const key=JSON.stringify(rows);if(id==='day'){if(key===previousDay)return;previousDay=key;}else{if(key===previousNight)return;previousNight=key;}const box=el(id);box.replaceChildren();rows.forEach((p,i)=>{const tr=document.createElement('tr');for(const text of [i,p.slice(0,3).join(', '),p[3]]){const td=document.createElement('td');td.textContent=text;tr.append(td);}const swatch=document.createElement('span');swatch.className='swatch';swatch.style.backgroundColor=`rgb(${p.slice(0,3).map(v=>Math.round(v*p[3]/255)).join(',')})`;tr.children[1].prepend(swatch);box.append(tr);});}
+function render(d){const box=el('sensors');box.replaceChildren();for(const [key,label,unit]of [['waterF','Water','°F'],['cpuC','CPU','°C'],['ambientPercent','Ambient','%']]){const s=d.sensors[key],p=document.createElement('p');p.textContent=label+': '+(s.value===null?'Unavailable':s.value.toFixed(1)+' '+unit)+' · '+(s.mocked?'Mock':s.healthy?'Healthy':'Error / stale')+(s.ageMs===null?'':' · '+Math.floor(s.ageMs/1000)+'s since reading');box.append(p);}
+pairs('wifi',[['Network',d.wifi.ssid||'Unavailable'],['IP address',d.wifi.ip||'Unavailable'],['Signal',d.wifi.rssiDbm===null?'Unavailable':d.wifi.rssiDbm+' dBm'],['Connection',d.wifi.connected?'Connected':'Disconnected'],['Lamp time',time(d.utc,d)],['RTC',d.rtcMocked?'Mock':d.rtcHealthy?'Healthy':'Unavailable / holdover'],['RTC read age',d.timeValid?Math.floor(d.rtcAgeMs/1000)+'s':'Unavailable'],['Uptime',Math.floor(d.uptimeMs/1000)+'s']]);
+const offsets=o=>`Sunrise ${o.sunriseSeconds}s · sunset ${o.sunsetSeconds}s · off limit ${o.absoluteOffSeconds}s after local midnight`;
+pairs('rgb',[['Current mode',d.rgbMode],['Strip',d.stripReady?'Ready':'Unavailable'],['Next day / on',time(d.schedule.lightsOn,d)],['Next night / off',time(d.schedule.lightsOff,d)],['Override expires',d.lightsDelay?time(d.lightsDelay,d):'Automatic'],['Offsets',offsets(d.lightsOffsets)]]);
+pairs('grow',[['Current output',d.growlightOn?'On':'Off'],['Next on',time(d.schedule.growlightOn,d)],['Next off',time(d.schedule.growlightOff,d)],['Override expires',d.growlightDelay?time(d.growlightDelay,d):'Automatic'],['Offsets',offsets(d.growlightOffsets)]]);
+leds('day',d.lights);leds('night',d.nightlights);}
+async function poll(){const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),5000);try{const r=await fetch('/status',{cache:'no-store',signal:abort.signal});if(!r.ok)throw Error('HTTP '+r.status);render(await r.json());el('connection').textContent='Live · refreshed '+new Date().toLocaleTimeString()+' · polls every 3 seconds';el('connection').className='';}catch(e){el('connection').textContent='Connection lost — displayed values may be stale. Retrying…';el('connection').className='failed';}finally{clearTimeout(timer);setTimeout(poll,3000);}}
+poll();
+</script></body></html>)HTML";

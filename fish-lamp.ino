@@ -10,6 +10,7 @@
 #include "src/StatusLed.h"
 #include "src/StatusDisplay.h"
 #include "src/SetupButton.h"
+#include "src/WebService.h"
 
 LightingController lighting;
 TimeService clockService;
@@ -21,6 +22,7 @@ SensorManager sensors;
 StatusLed statusLed;
 StatusDisplay statusDisplay;
 SetupButton setupButton;
+WebService web;
 
 void setup() {
   lighting.begin();
@@ -56,4 +58,5 @@ void loop() {
   statusDisplay.tick(millis(), settings, clockService, schedule, lighting, networking, sensors);
   diagnostics.tick(now, controlUs, settings, clockService, schedule, lighting, int(networking.state()), sensors);
   networking.tick(millis(), settings, clockService);
+  web.tick(millis(), settings, clockService, schedule, lighting, networking, sensors);
 }

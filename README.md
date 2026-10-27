@@ -131,8 +131,11 @@ RSSI sampling added for it. Actual bus timings, glyph layout/orientation, addres
 and operation with a disconnected/stuck OLED must be checked on hardware.
 
 If OneDrive leaves the installed U8g2 source files unreadable, extract the official
-U8g2 2.36.19 Arduino library archive into `build/dependencies/`, then select that
-local copy without replacing the shared installation:
+U8g2 2.36.19 Arduino library archive into `build/dependencies/`. Both build scripts
+automatically prefer `build/dependencies/U8g2-2.36.19` when present, so their normal
+no-argument invocation works without replacing the shared installation. This clean
+copy is already available in this workspace. An explicit path overrides automatic
+selection:
 
 ```powershell
 ./build-picowh.ps1 -U8g2Path ./build/dependencies/U8g2-2.36.19

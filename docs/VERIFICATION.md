@@ -1,5 +1,17 @@
 # Verification record
 
+## Default build library selection — 2026-10-27
+
+* Reproduced plain `./build-picowh.ps1` failure: the compiler could not read
+  U8g2 sources from the shared OneDrive library installation (`Invalid argument`).
+* Both board scripts now automatically prefer the existing clean
+  `build/dependencies/U8g2-2.36.19` package. An explicit `-U8g2Path` still takes
+  priority; without a local package, normal Arduino library discovery applies.
+* Plain `./build-picowh.ps1` then passed without extra arguments: **428,444 bytes
+  flash**, **122,568 bytes static RAM**, **139,576 bytes** remaining for stack/heap.
+  Dependency warnings remain. Pico 2 W script syntax was checked; this build-script
+  fix did not change firmware, pins, board selections or flash layouts.
+
 ## OLED diagnostics — 2026-10-27
 
 * Confirmed Postal Clock's display class uses SH1106 128×64 with U8g2. Added

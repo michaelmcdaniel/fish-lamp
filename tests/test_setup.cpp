@@ -1,6 +1,10 @@
 #include "SetupService.h"
 #include "Devices.h"
 #include "SetupButton.h"
+#include "StatusDisplay.h"
+#include "LightingController.h"
+#include "SensorManager.h"
+#include "ScheduleController.h"
 #include <Bootsel.h>
 #include <LittleFS.h>
 #include <Wire.h>
@@ -124,6 +128,7 @@ unsigned testSetup(const std::string& fixture) {
 
   resetHardware();ConfigManager c;c.begin();TimeService t;t.begin();SetupService s;s.begin(c);pump(s,c,t);
   REQUIRE(s.state()==SetupService::State::AccessPoint && WiFi.openAP && !WiFi.protectedAP);
+  REQUIRE(WiFi.apRunning && WiFi.apConfigStored && !WiFi.stationStaticIP);
   const auto dnsRequests=fakeDnsRequests;
   pump(s,c,t);REQUIRE(fakeDnsStarts>0 && fakeDnsRequests==dnsRequests+1);
   auto portal=exchange(s,c,t,"GET /hotspot-detect.html HTTP/1.1\r\nHost: captive.apple.com\r\n\r\n");
@@ -147,13 +152,45 @@ unsigned testSetup(const std::string& fixture) {
   sessionToken=token(ns,nc,nt);
   auto accepted=exchange(ns,nc,nt,post(networkBody,sessionToken));
   REQUIRE(accepted.find("202 Accepted")!=std::string::npos && ns.state()==SetupService::State::Testing && !nc.valid());
+  REQUIRE(!WiFi.apRunning && WiFi.getMode()==WIFI_STA && WiFi.misroutedBegins==0);
+  REQUIRE(!WiFi.stationStaticIP && WiFi.dhcpResets>0);
   pump(ns,nc,nt,20001);REQUIRE(ns.state()==SetupService::State::AccessPoint && !nc.valid() && rp2040.reboots==0);
   auto error=exchange(ns,nc,nt,get("/session"));REQUIRE(error.find("Could not connect")!=std::string::npos);
+#if FISH_LAMP_OLED
+  // Every fragment of a long setup error must be readable, even on forced setup.
+  REQUIRE(nc.requestSetup());
+  Wire1=FakeWire{};StatusDisplay display;display.begin(0);
+  ScheduleController displaySchedule;LightingController displayLights;displayLights.begin();SensorManager displaySensors;
+  auto screen=[&](uint32_t now){display.tick(now,nc,nt,displaySchedule,displayLights,ns,displaySensors);};
+  screen(100);for(unsigned i=0;i<73;++i)screen(100);
+  const std::string fullError=ns.lastError();const unsigned pages=unsigned((fullError.size()+20)/21);
+  std::string reconstructed;
+  for(unsigned fragment=0;fragment<pages;++fragment) {
+    uint32_t now=1100+fragment*3000;screen(now);
+    const std::string line=fakeOledLines[7],prefix=std::to_string(fragment+1)+"/"+std::to_string(pages)+" ";
+    REQUIRE(line.find(prefix)==0);reconstructed+=line.substr(prefix.size());
+    for(unsigned i=0;i<72;++i)screen(now);
+  }
+  REQUIRE(reconstructed==fullError);
+#endif
+  for(const auto& reason : {std::pair<int,const char*>{CYW43_LINK_BADAUTH,"authentication failed"},
+                           {CYW43_LINK_NONET,"not found"},{CYW43_LINK_JOIN,"DHCP"}}) {
+    sessionToken=token(ns,nc,nt);exchange(ns,nc,nt,post(networkBody,sessionToken));
+    fakeScan.linkStatus=reason.first;pump(ns,nc,nt,20001);
+    REQUIRE(ns.state()==SetupService::State::AccessPoint && !nc.valid());
+    REQUIRE(std::string(ns.lastError()).find(reason.second)!=std::string::npos);
+  }
+  fakeScan.linkStatus=CYW43_LINK_DOWN;
   sessionToken=token(ns,nc,nt);
   exchange(ns,nc,nt,post(networkBody,sessionToken));
+  WiFi.mode(WIFI_AP);WiFi.apRunning=true; // An AP's connected status is not a station connection.
+  pump(ns,nc,nt);REQUIRE(ns.state()==SetupService::State::Testing && !nc.valid());
+  WiFi.mode(WIFI_STA);WiFi.apRunning=false;
   WiFi.statusCode=WL_CONNECTED;pump(ns,nc,nt);
   REQUIRE(nc.valid() && ns.restarting());
   SetupService station;station.begin(nc);REQUIRE(station.state()==SetupService::State::StationConnecting);
+  REQUIRE(WiFi.getMode()==WIFI_STA && !WiFi.apRunning && !WiFi.stationStaticIP);
+  WiFi.statusCode=WL_CONNECTED; // A fresh station attempt must actually reconnect.
   pump(station,nc,nt);REQUIRE(station.state()==SetupService::State::StationOnline);
   if(devices::oled) {
     REQUIRE(station.signalValid() && station.signalDbm()==-55);

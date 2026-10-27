@@ -34,10 +34,11 @@ class StatusDisplay {
   enum class Phase { Off, PowerWait, Splash, Live };
   Phase phase_ = Phase::Off;
   uint32_t lastMs_ = 0, uptimeMs_ = 0, uptimeSeconds_ = 0, faults_ = 0;
+  uint32_t warningSeconds_ = 0;
   uint16_t uptimeRemainder_ = 0;
   uint8_t pending_ = 0, row_ = 0, column_ = 0;
   bool addressed_ = false, screenOn_ = false;
-  char previous_[8][26]{}, lastWarning_[26]{};
+  char previous_[8][26]{}, lastWarning_[128]{};
   const char* setupError_ = "";
 #endif
 };

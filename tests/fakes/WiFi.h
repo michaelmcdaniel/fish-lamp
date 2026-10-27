@@ -6,7 +6,12 @@
 #include <algorithm>
 #include <cstring>
 constexpr int WL_CONNECTED=3;
-struct IPAddress { IPAddress(int,int,int,int) {} };
+enum WiFiMode_t { WIFI_OFF=0, WIFI_STA=1, WIFI_AP=2, WIFI_AP_STA=3 };
+struct IPAddress {
+  int bytes[4];
+  IPAddress(int a,int b,int c,int d):bytes{a,b,c,d} {}
+  bool isSet() const { return bytes[0] || bytes[1] || bytes[2] || bytes[3]; }
+};
 struct FakeSocket { std::string input,output; size_t read=0; bool live=true; int room=4096; unsigned stopWait=0; };
 struct WiFiClient {
   std::shared_ptr<FakeSocket> socket;
@@ -41,19 +46,40 @@ struct WiFiServer {
 };
 struct FakeWiFi {
   bool apOK=true, protectedAP=false, openAP=false;
+  bool apRunning=false, stationStaticIP=false, apConfigStored=false;
+  WiFiMode_t modeValue=WIFI_OFF;
   unsigned starts=0, ends=0, stationAttempts=0;
+  unsigned apDisconnects=0, misroutedBegins=0, dhcpResets=0;
   int statusCode=0;
   int32_t signal=-55;
   unsigned signalReads=0;
   void setTimeout(unsigned) {}
-  void end() { ++ends; statusCode=0; }
-  void softAPConfig(IPAddress,IPAddress,IPAddress) {}
+  void mode(WiFiMode_t value) { modeValue=value; }
+  WiFiMode_t getMode() { return modeValue; }
+  // Match installed Arduino-Pico: end/disconnect leave an AP active.
+  void end() { ++ends; statusCode=0;if(modeValue==WIFI_STA)modeValue=WIFI_OFF; }
+  bool disconnectAP() {
+    ++apDisconnects;bool active=apRunning;apRunning=false;
+    if(modeValue==WIFI_AP)modeValue=WIFI_OFF;
+    return active;
+  }
+  void softAPConfig(IPAddress ip,IPAddress,IPAddress) {
+    if(modeValue==WIFI_AP || modeValue==WIFI_AP_STA)apConfigStored=true;
+    else stationStaticIP=ip.isSet();
+  }
+  void config(IPAddress ip,IPAddress,IPAddress,IPAddress) {
+    stationStaticIP=ip.isSet();if(!stationStaticIP)++dhcpResets;
+  }
   bool softAP(const char*,const char* password=nullptr) {
     ++starts; openAP=password==nullptr;
-    protectedAP=password && strlen(password)>=8; return apOK;
+    protectedAP=password && strlen(password)>=8;
+    apRunning=apOK;modeValue=apOK?WIFI_AP:WIFI_OFF;return apOK;
   }
-  void beginNoBlock(const char*,const char*) { ++stationAttempts; }
-  int status() { return statusCode; }
+  int beginNoBlock(const char* ssid,const char* password) {
+    if(modeValue==WIFI_AP) {++misroutedBegins;return softAP(ssid,password)?WL_CONNECTED:0;}
+    ++stationAttempts;modeValue=WIFI_STA;statusCode=0;return statusCode;
+  }
+  int status() { return modeValue==WIFI_AP && apRunning ? WL_CONNECTED : statusCode; }
   int32_t RSSI() { ++signalReads; return signal; }
 };
 inline FakeWiFi WiFi;

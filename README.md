@@ -120,7 +120,8 @@ RGB `B:min-max` is the **applied per-pixel brightness range, 0–255**, rather t
 an invented global brightness. `*` marks an RGB manual override; grow overrides
 are marked `MAN`. `Last:` retains the most recently observed warning after
 recovery; simultaneous faults have a deterministic display priority. Long warning
-messages are truncated to fit. No SSID, password, setup key or endpoint is shown.
+messages cycle through numbered pages every three seconds. Setup failures also
+print their complete message to USB Serial. No SSID, password, setup key or endpoint is shown.
 
 `StatusDisplay` observes existing state every 500 ms and sends only changed
 rows, one bounded I2C transaction per loop (16 framebuffer bytes per data chunk).
@@ -202,6 +203,12 @@ usable. Normal-operation HTTP sensor reporting remains deferred.
 5. If network testing, RTC verification or storage fails, setup remains available
    or returns automatically. Rejoin FishLamp-Setup and reload for the error.
    The browser's initial network-test acknowledgement is not a saved confirmation.
+
+The firmware explicitly stops the AP before joining home Wi-Fi, resets the
+station interface to DHCP, and accepts only a station connection as success.
+Failed tests distinguish authentication, missing 2.4 GHz network and DHCP errors
+when the radio provides that information. Read the numbered OLED error pages,
+USB Serial, or rejoin the setup AP to read the complete message in the browser.
 
 After a successful restart, saved settings are loaded and lighting starts using
 the RTC. **Setup does not repeat on every power-up.** The AP is absent on a normal

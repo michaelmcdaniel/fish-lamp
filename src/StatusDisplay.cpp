@@ -132,15 +132,25 @@ void StatusDisplay::snapshot(uint32_t now, const ConfigManager& settings,
   for(unsigned i=0;i<sizeof(fault)/sizeof(fault[0]);++i) {
     if(!fault[i]) continue;
     faults |= 1u<<i;
-    if(!(faults_ & (1u<<i))) snprintf(lastWarning_,sizeof(lastWarning_),"%s",message[i]);
+    if(!(faults_ & (1u<<i))) {snprintf(lastWarning_,sizeof(lastWarning_),"%s",message[i]);warningSeconds_=uptimeSeconds_;}
   }
   faults_=faults;
   if(strcmp(setupError_,network.lastError())) {
     setupError_=network.lastError();
-    if(*setupError_) snprintf(lastWarning_,sizeof(lastWarning_),"%.25s",setupError_);
+    if(*setupError_) {snprintf(lastWarning_,sizeof(lastWarning_),"%s",setupError_);warningSeconds_=uptimeSeconds_;}
   }
-  if(*lastWarning_) snprintf(lines[7],26,"Last: %.19s",lastWarning_);
-  if(settings.setupRequested()) snprintf(lines[7],26,"Setup on next boot");
+  if(*lastWarning_) {
+    const unsigned length=unsigned(strlen(lastWarning_));
+    if(length<=19) snprintf(lines[7],26,"Last: %.19s",lastWarning_);
+    else {
+      constexpr unsigned width=21;
+      static_assert(sizeof(lastWarning_)<=9*width+1,"Warning page numbers must fit one digit");
+      const unsigned pages=(length+width-1)/width;
+      const unsigned page=uint32_t(uptimeSeconds_-warningSeconds_)/3%pages;
+      snprintf(lines[7],26,"%c/%c %.21s",int('1'+page),int('0'+pages),lastWarning_+page*width);
+    }
+  }
+  if(settings.setupRequested() && !*network.lastError()) snprintf(lines[7],26,"Setup on next boot");
   render(lines);
   lastMs_=now;
 }

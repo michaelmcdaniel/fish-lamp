@@ -19,6 +19,7 @@ class SetupService {
   const char* lastError() const { return lastError_; } // Fixed diagnostic messages only.
  private:
   void startAP(uint32_t now);
+  void startStation(const Config& candidate,State nextState);
   void closeClient();
   void reply(int code, const char* type, const char* body, uint32_t now);
   void handle(uint32_t now, ConfigManager& settings, TimeService& clock);

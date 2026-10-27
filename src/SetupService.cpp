@@ -14,9 +14,21 @@ void SetupService::begin(const ConfigManager& settings) {
     WiFi.end(); networks_.begin(millis()); state_=State::Scanning;
   }
   else if (*settings.config.wifiSsid) {
-    WiFi.beginNoBlock(settings.config.wifiSsid, *settings.config.wifiPassword ? settings.config.wifiPassword : nullptr);
-    state_ = State::StationConnecting; stateMs_ = millis();
+    startStation(settings.config,State::StationConnecting);
   }
+}
+void SetupService::startStation(const Config& candidate,State nextState) {
+  dns_.stop(); dnsRunning_=false;
+  // In Arduino-Pico 6.0/6.3, end() only disconnects STA. In AP mode,
+  // beginNoBlock() otherwise starts another AP instead of joining the router.
+  WiFi.disconnectAP();
+  WiFi.end();
+  WiFi.mode(WIFI_STA);
+  const IPAddress automatic(0,0,0,0);
+  WiFi.config(automatic,automatic,automatic,automatic); // Fresh DHCP, no AP address.
+  const int result=WiFi.beginNoBlock(candidate.wifiSsid,*candidate.wifiPassword ? candidate.wifiPassword : nullptr);
+  state_=nextState; stateMs_=millis(); signalValid_=false;
+  mockdebug::log("WiFi station start: status=%d mode=%d\r\n",result,int(WiFi.getMode()));
 }
 void SetupService::closeClient() {
   if (clientActive_) client_.stop(1); // Default stop can wait seconds for ACKs.
@@ -24,7 +36,10 @@ void SetupService::closeClient() {
 }
 void SetupService::startAP(uint32_t now) {
   dns_.stop(); dnsRunning_=false;
+  WiFi.disconnectAP();
   WiFi.end(); // Never depend on simultaneous station + AP operation.
+  // softAPConfig() configures STA instead if mode is not explicitly AP yet.
+  WiFi.mode(WIFI_AP);
   WiFi.softAPConfig(IPAddress(192,168,4,1),IPAddress(192,168,4,1),IPAddress(255,255,255,0));
   stateMs_ = now;
   // Open setup network, explicitly requested by the owner. No AP password.
@@ -47,6 +62,7 @@ void SetupService::reply(int code, const char* type, const char* body, uint32_t 
 }
 void SetupService::fail(const char* message) {
   lastError_=message; testAfterResponse_=false;
+  mockdebug::log("Setup failed: %s\r\n",message);
   candidate_=Config{}; request_.reset();
   state_=State::StartAP;
 }
@@ -85,7 +101,7 @@ void SetupService::handle(uint32_t now, ConfigManager& settings, TimeService& cl
       if (state_==State::Restart) reply(200,"text/plain",devices::rtc ?
         "Settings saved and clock verified. The lamp will restart in a few seconds. Offline lighting is ready." :
         "Settings saved. Mock RTC accepted the time in RAM only; restart restores the mock starting time. The lamp will restart in a few seconds.",millis());
-      else reply(503,"text/plain",lastError_,millis());
+      else {mockdebug::log("Setup failed: %s\r\n",lastError_);reply(503,"text/plain",lastError_,millis());}
     }
   } else reply(404,"text/plain","Not found. Open http://192.168.4.1/",now);
 }
@@ -101,7 +117,7 @@ void SetupService::tick(uint32_t now, ConfigManager& settings, TimeService& cloc
     return;
   }
   if (state_==State::StationConnecting || state_==State::StationOnline) {
-    if (WiFi.status()==WL_CONNECTED) {
+    if (WiFi.getMode()==WIFI_STA && WiFi.status()==WL_CONNECTED) {
       const bool justConnected = state_ != State::StationOnline;
       state_=State::StationOnline;
       if(devices::oled && (justConnected || uint32_t(now-signalMs_)>=1000)) {
@@ -118,16 +134,22 @@ void SetupService::tick(uint32_t now, ConfigManager& settings, TimeService& cloc
   }
   if (state_==State::StationRetry) {
     if (uint32_t(now-stateMs_)>=60000) {
-      WiFi.beginNoBlock(settings.config.wifiSsid,*settings.config.wifiPassword ? settings.config.wifiPassword : nullptr);
-      state_=State::StationConnecting; stateMs_=now;
+      startStation(settings.config,State::StationConnecting);
     }
     return;
   }
   if (state_==State::Testing) {
-    if (WiFi.status()==WL_CONNECTED) {
+    if (WiFi.getMode()==WIFI_STA && WiFi.status()==WL_CONNECTED) {
       commit(now,settings,clock);
       if (state_!=State::Restart) fail(lastError_);
-    } else if (uint32_t(now-stateMs_)>=20000) fail("Could not connect to home Wi-Fi. Check the network and password. Settings were not saved.");
+    } else if (uint32_t(now-stateMs_)>=20000) {
+      const int link=cyw43_wifi_link_status(&cyw43_state,CYW43_ITF_STA);
+      mockdebug::log("WiFi test failed: status=%d link=%d mode=%d\r\n",int(WiFi.status()),link,int(WiFi.getMode()));
+      if(link==CYW43_LINK_BADAUTH) fail("Home Wi-Fi authentication failed. Check password and router security. Settings were not saved.");
+      else if(link==CYW43_LINK_NONET) fail("Home Wi-Fi network not found on 2.4 GHz. Check SSID and band. Settings were not saved.");
+      else if(link==CYW43_LINK_JOIN) fail("Wi-Fi joined but DHCP did not provide an address. Check router DHCP. Settings were not saved.");
+      else fail("Could not connect to home Wi-Fi. Check the network and password. Settings were not saved.");
+    }
     return;
   }
   if (state_==State::Restart && uint32_t(now-stateMs_)>=4000) {
@@ -166,8 +188,7 @@ void SetupService::tick(uint32_t now, ConfigManager& settings, TimeService& cloc
   }
   if (!clientActive_ && testAfterResponse_) {
     if(server_.hasClient()) {auto pending=server_.accept();pending.stop(1);}
-    testAfterResponse_=false; dns_.stop(); dnsRunning_=false; server_.end(); WiFi.end();
-    WiFi.beginNoBlock(candidate_.wifiSsid,*candidate_.wifiPassword ? candidate_.wifiPassword : nullptr);
-    state_=State::Testing; stateMs_=now;
+    testAfterResponse_=false; server_.end();
+    startStation(candidate_,State::Testing);
   }
 }

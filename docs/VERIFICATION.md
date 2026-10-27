@@ -1,5 +1,28 @@
 # Verification record
 
+## Home Wi-Fi testing transition and readable errors — 2026-10-27
+
+* Installed Arduino-Pico 6.0.0/6.3.1 source inspection found that `WiFi.end()`
+  leaves AP mode active; `beginNoBlock()` in that mode starts an AP rather than
+  joining the router. Also, `softAPConfig()` before selecting AP mode configures
+  the station address instead. The corrected sequence explicitly disconnects
+  the AP, selects the destination mode, and resets the station to DHCP.
+  Connection success now requires station mode, not an AP's connected status.
+* Updated Wi-Fi fakes reproduce these core behaviors. Regression tests failed
+  against the old setup sequence, then passed with the fix. Tests cover failed
+  joins, AP recovery, station-only success, DHCP reset and distinct radio error
+  messages without exposing credentials.
+* OLED errors cycle through 21-character numbered pages every three seconds.
+  Tests reconstruct the complete error across pages and verify the BOOTSEL
+  marker cannot hide a setup failure. USB Serial logs complete setup errors.
+* `./test.ps1` passed **218,188 checks**, both real/mock device suites and both
+  OLED enabled/disabled suites. `./build-picowh.ps1` passed: 442,900 bytes flash,
+  123,036 bytes static RAM, 139,108 bytes remaining. Only existing dependency
+  warnings from Adafruit NeoPixel and core Wi-Fi headers were emitted.
+* Physical router connection and radio timing still require the owner's Pico WH.
+  Compilation and simulated tests do not establish successful hardware joining.
+  Only the Pico WH is being compiled for current testing, per owner instruction.
+
 ## Setup UX, captive portal, BOOTSEL and ambient display — 2026-10-27
 
 * Replaced the datalist with a native SSID select. Manual reveals an SSID input;

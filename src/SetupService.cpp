@@ -6,13 +6,6 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
-#if __has_include("SetupSecrets.h")
-#include "SetupSecrets.h"
-#else
-#error "Run tools/new-setup-key.ps1 once before building to create private AP credentials."
-#endif
-static_assert(sizeof(FISH_LAMP_SETUP_PASSWORD) >= 9 && sizeof(FISH_LAMP_SETUP_PASSWORD) <= 64,
-              "Setup AP password must contain 8 to 63 characters.");
 
 void SetupService::begin(const ConfigManager& settings) {
   if(!devices::wifi) { state_=State::Disabled; mockdebug::log("mock WiFi: disconnected; setup unavailable\r\n"); return; }
@@ -33,7 +26,8 @@ void SetupService::startAP(uint32_t now) {
   WiFi.end(); // Never depend on simultaneous station + AP operation.
   WiFi.softAPConfig(IPAddress(192,168,4,1),IPAddress(192,168,4,1),IPAddress(255,255,255,0));
   stateMs_ = now;
-  if (!WiFi.softAP("FishLamp-Setup", FISH_LAMP_SETUP_PASSWORD)) { state_=State::APFailed; return; }
+  // Open setup network, explicitly requested by the owner. No AP password.
+  if (!WiFi.softAP("FishLamp-Setup")) { state_=State::APFailed; return; }
   for (unsigned i=0;i<4;++i) snprintf(token_+i*8,9,"%08lx",static_cast<unsigned long>(rp2040.hwrand32()));
   server_.begin(80,1);
   if (!server_) { WiFi.end(); state_=State::APFailed; return; }

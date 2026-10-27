@@ -23,7 +23,7 @@ desktop checks, not hardware acceptance.
 | OLED diagnostics | Optional SH1106 128×64, Wire1 GPIO 2/3, one-second cached status, changed-row bounded transfers, disable on I2C failure | Physical address/orientation/readability and fault timing checks pending; `FISH_LAMP_OLED=0` removes display support |
 | Device selection | Individual real/mock compile-time switches; external-device bench profile | Mock outputs use bounded debug queue; mock RTC resets at boot |
 | Wi-Fi station | Implemented nonblocking connection/retry states | Actual outage/reconnection timing tests pending |
-| Protected provisioning AP | Implemented for missing/invalid config, local mobile page, test/save/restart | Private per-build key; physical AP and restart tests pending |
+| Open provisioning AP | Owner requested password-free FishLamp-Setup; local mobile page, session token, test/save/restart | Intentional change from protected AP; physical association and restart tests pending |
 | Setup network discovery | Bounded pre-AP scan; editable SSID combo; strongest 24 distinct networks cached | Manual hidden-network entry; physical scanning pending |
 | HTTP and Vue UI | Setup-only page implemented | Legacy normal-operation API and Vue UI remain deferred |
 | Telemetry POST | Deferred | Preserve Fahrenheit `temperature`; document that humidity/pressure were placeholders |

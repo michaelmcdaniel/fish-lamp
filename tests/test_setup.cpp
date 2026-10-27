@@ -116,7 +116,7 @@ unsigned testSetup(const std::string& fixture) {
   REQUIRE(!rtc.setUtc(0,20));Wire.failure=true;REQUIRE(!rtc.setUtc(utc,30));
 
   resetHardware();ConfigManager c;c.begin();TimeService t;t.begin();SetupService s;s.begin(c);pump(s,c,t);
-  REQUIRE(s.state()==SetupService::State::AccessPoint && WiFi.protectedAP);
+  REQUIRE(s.state()==SetupService::State::AccessPoint && WiFi.openAP && !WiFi.protectedAP);
   auto sessionToken=token(s,c,t);
   auto page=exchange(s,c,t,get("/"));REQUIRE(page.find("Set up your Fish Lamp")!=std::string::npos);
   auto denied=exchange(s,c,t,post(body,std::string(32,'f')));REQUIRE(denied.find("403")!=std::string::npos && !c.valid());

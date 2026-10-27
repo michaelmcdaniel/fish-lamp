@@ -2,7 +2,7 @@
 
 This is the first functional C++ slice for Pico 2 W and Pico WH, not the completed appliance.
 It implements safe outputs, DS3231-backed offline time, solar scheduling, validated
-configuration storage, a protected Wi-Fi setup page, and USB Serial controls. Hardware reliability has **not**
+configuration storage, an open Wi-Fi setup network, and USB Serial controls. Hardware reliability has **not**
 been established. See [feature parity](docs/FEATURE-PARITY.md) and
 [verification](docs/VERIFICATION.md) for scope and remaining work.
 
@@ -27,11 +27,12 @@ without changing PATH. The board tools and libraries use Arduino's user director
 Re-running setup reuses installed dependencies. Visual Studio C++ tools are needed
 only for host tests, not for the firmware build.
 
-The private setup key has already been generated in this workspace. On a fresh
-checkout, first run `tools/new-setup-key.ps1` **once**. It creates ignored
-`src/SetupSecrets.h` and `setup-access.txt`; builds intentionally fail without
-the header rather than creating an open AP. Keep these files private and reuse
-them for subsequent builds. The generator never overwrites existing access files.
+`FishLamp-Setup` is an **open network with no password**, as requested by the
+owner. No setup-key generation is required to build. Existing ignored
+`src/SetupSecrets.h` and `setup-access.txt` files are unused by the firmware;
+`tools/new-setup-key.ps1` is a legacy helper and does not change the open AP.
+Home Wi-Fi credentials still belong in the setup form, and the setup session
+token is still required when submitting configuration.
 
 ```powershell
 ./setup-tools.ps1 # first-time toolchain installation
@@ -161,10 +162,9 @@ usable. Normal-operation HTTP sensor reporting remains deferred.
 
 ### Provisioning steps
 
-1. Build and upload the firmware to the Pico 2 W. On missing or invalid settings,
+1. Build and upload the firmware for your Pico. On missing or invalid settings,
    it scans nearby 2.4 GHz networks for up to eight seconds, then starts the
-   password-protected **FishLamp-Setup** network. Find its password
-   in the local ignored `setup-access.txt` file. Credentials never print to Serial.
+   open **FishLamp-Setup** network. Join without entering a password.
 2. Join that network from your phone/computer and open **http://192.168.4.1/**.
    Stay connected if the device warns that this Wi-Fi has no Internet. There is
    no captive DNS redirect; enter the address explicitly. All page assets are local.

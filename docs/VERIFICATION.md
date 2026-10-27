@@ -1,5 +1,18 @@
 # Verification record
 
+## Open setup AP at owner's request — 2026-10-27
+
+* Changed FishLamp-Setup to the installed core's open-AP call with no password.
+  Removed the SetupSecrets header dependency and AP password length assertion.
+  Session-token validation and home Wi-Fi credential handling remain in place.
+  Existing private access files were not changed and are no longer used.
+* `./test.ps1` passed: **218,128 checks**, both device-adapter profiles, and
+  OLED-enabled/disabled suites. Setup tests now require a null AP password.
+* Plain `./build-picowh.ps1` passed: **428,420 bytes flash**, **122,568 bytes
+  static RAM**, **139,576 bytes** remaining for stack/heap. Core Wi-Fi warnings
+  remain. Updated UF2: `build/picowh/fish-lamp.ino.uf2`.
+* No device flashed or physical Wi-Fi association tested during this change.
+
 ## Default build library selection — 2026-10-27
 
 * Reproduced plain `./build-picowh.ps1` failure: the compiler could not read

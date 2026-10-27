@@ -39,6 +39,13 @@ void SensorManager::tick(uint32_t now) {
     sample(waterF,c*1.8f+32.0f,good && c>=-55 && c<=125,now);
   }
 #endif
+  if(ambientFirst_ || uint32_t(now-ambientMs_)>=500) {
+    ambientFirst_=false; ambientMs_=now;
+    if(devices::ambient) {
+      int raw=analogRead(devices::ambientPin);
+      sample(ambientPercent,float(raw)*100.0f/4095.0f,raw>=0 && raw<=4095,now);
+    } else mock(ambientPercent,devices::mockAmbientPercent,now);
+  }
   if(!first_ && uint32_t(now-attemptedMs_)<60000) return;
   first_=false; attemptedMs_=now;
   if(!devices::water) mock(waterF,devices::mockWaterF,now);
@@ -60,10 +67,6 @@ void SensorManager::tick(uint32_t now) {
     conversionMs_=millis(); converting_=true;
   } else waterF.healthy=false;
 #endif
-  if(devices::ambient) {
-    int raw=analogRead(devices::ambientPin);
-    sample(ambientPercent,float(raw)*100.0f/4095.0f,raw>=0 && raw<=4095,now);
-  } else mock(ambientPercent,devices::mockAmbientPercent,now);
   if(devices::cpu) {
     float sum=0;
     for(unsigned i=0;i<8;++i) sum+=analogReadTemp();

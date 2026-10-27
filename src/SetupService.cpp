@@ -10,7 +10,7 @@
 void SetupService::begin(const ConfigManager& settings) {
   if(!devices::wifi) { state_=State::Disabled; mockdebug::log("mock WiFi: disconnected; setup unavailable\r\n"); return; }
   WiFi.setTimeout(1000);
-  if (!settings.valid()) {
+  if (!settings.valid() || settings.setupRequested()) {
     WiFi.end(); networks_.begin(millis()); state_=State::Scanning;
   }
   else if (*settings.config.wifiSsid) {
@@ -23,6 +23,7 @@ void SetupService::closeClient() {
   client_ = WiFiClient(); clientActive_ = responding_ = false;
 }
 void SetupService::startAP(uint32_t now) {
+  dns_.stop(); dnsRunning_=false;
   WiFi.end(); // Never depend on simultaneous station + AP operation.
   WiFi.softAPConfig(IPAddress(192,168,4,1),IPAddress(192,168,4,1),IPAddress(255,255,255,0));
   stateMs_ = now;
@@ -31,14 +32,17 @@ void SetupService::startAP(uint32_t now) {
   for (unsigned i=0;i<4;++i) snprintf(token_+i*8,9,"%08lx",static_cast<unsigned long>(rp2040.hwrand32()));
   server_.begin(80,1);
   if (!server_) { WiFi.end(); state_=State::APFailed; return; }
+  dns_.setTTL(0);
+  dnsRunning_=dns_.start(53,"*",IPAddress(192,168,4,1));
+  if(!dnsRunning_) mockdebug::log("Setup DNS unavailable; open http://192.168.4.1/ manually\r\n");
   state_=State::AccessPoint;
 }
 void SetupService::reply(int code, const char* type, const char* body, uint32_t now) {
-  const char* reason = code==200 ? "OK" : code==202 ? "Accepted" : "Error";
+  const char* reason = code==200 ? "OK" : code==202 ? "Accepted" : code==302 ? "Found" : "Error";
   response_=body; responseLength_=strlen(body); sent_=0;
   headerLength_=size_t(snprintf(header_,sizeof(header_),
-    "HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %u\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\r\n",
-    code,reason,type,unsigned(responseLength_)));
+    "HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %u\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n%s\r\n",
+    code,reason,type,unsigned(responseLength_),code==302 ? "Location: http://192.168.4.1/\r\n" : ""));
   responding_=true; acceptedMs_=progressMs_=now;
 }
 void SetupService::fail(const char* message) {
@@ -62,6 +66,7 @@ void SetupService::commit(uint32_t now, ConfigManager& settings, TimeService& cl
 void SetupService::handle(uint32_t now, ConfigManager& settings, TimeService& clock) {
   using Route=SetupRequest::Route;
   if (request_.route==Route::Page) reply(200,"text/html; charset=utf-8",SetupPage,now);
+  else if(request_.route==Route::Redirect) reply(302,"text/plain","Open http://192.168.4.1/ to configure Fish Lamp.",now);
   else if (request_.route==Route::Networks) reply(200,"application/json",networks_.json(),now);
   else if (request_.route==Route::Session) {
     snprintf(session_,sizeof(session_),"{\"token\":\"%s\",\"error\":\"%s\"}",token_,lastError_);
@@ -126,9 +131,12 @@ void SetupService::tick(uint32_t now, ConfigManager& settings, TimeService& cloc
     return;
   }
   if (state_==State::Restart && uint32_t(now-stateMs_)>=4000) {
+    dns_.stop(); dnsRunning_=false;
     closeClient(); rp2040.reboot(); return;
   }
   if (state_!=State::AccessPoint && state_!=State::Restart) return;
+  // The core handles one packet (maximum 512 bytes) per call, without forwarding.
+  if(dnsRunning_) dns_.processNextRequest();
   // Keep the single queued connection until the active response closes. Browsers
   // may request /session or /networks before the preceding socket has closed.
   // The installed lwIP enables TCP_LISTEN_BACKLOG; begin(80,1) bounds this queue.
@@ -158,7 +166,7 @@ void SetupService::tick(uint32_t now, ConfigManager& settings, TimeService& cloc
   }
   if (!clientActive_ && testAfterResponse_) {
     if(server_.hasClient()) {auto pending=server_.accept();pending.stop(1);}
-    testAfterResponse_=false; server_.end(); WiFi.end();
+    testAfterResponse_=false; dns_.stop(); dnsRunning_=false; server_.end(); WiFi.end();
     WiFi.beginNoBlock(candidate_.wifiSsid,*candidate_.wifiPassword ? candidate_.wifiPassword : nullptr);
     state_=State::Testing; stateMs_=now;
   }

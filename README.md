@@ -122,7 +122,7 @@ are marked `MAN`. `Last:` retains the most recently observed warning after
 recovery; simultaneous faults have a deterministic display priority. Long warning
 messages are truncated to fit. No SSID, password, setup key or endpoint is shown.
 
-`StatusDisplay` observes existing state once per second and sends only changed
+`StatusDisplay` observes existing state every 500 ms and sends only changed
 rows, one bounded I2C transaction per loop (16 framebuffer bytes per data chunk).
 Initialization waits use `millis()`, with no `delay()` or full-frame `sendBuffer()`.
 The OLED bus uses 100 kHz and a 5 ms transaction timeout. A missing OLED, NACK or
@@ -155,26 +155,44 @@ Real water sensing supports **one externally powered DS18B20** on GPIO 26, with
 the required pull-up. Parasite-power and multiple sensors on that bus are not
 supported. Conversion is asynchronous (at least 750 ms); samples/retries occur
 once per minute. CRC/family/range failures retain the last valid value and mark
-it unhealthy. Ambient percentage and averaged CPU temperature are separate
-readings. `valid=0` means no usable reading; never interpret its numeric default
+it unhealthy. Ambient percentage is sampled every **500 ms** on its own timer;
+averaged CPU temperature remains on the minute timer. The OLED uses the cached
+ambient reading at its 500 ms refresh cadence. `valid=0` means no usable reading; never interpret its numeric default
 as a measurement. The onboard status LED is on when configuration and time are
 usable. Normal-operation HTTP sensor reporting remains deferred.
 
 ### Provisioning steps
 
-1. Build and upload the firmware for your Pico. On missing or invalid settings,
+1. Build and upload the firmware for your Pico. On missing/invalid settings or a
+   saved BOOTSEL setup request,
    it scans nearby 2.4 GHz networks for up to eight seconds, then starts the
    open **FishLamp-Setup** network. Join without entering a password.
 2. Join that network from your phone/computer and open **http://192.168.4.1/**.
-   Stay connected if the device warns that this Wi-Fi has no Internet. There is
-   no captive DNS redirect; enter the address explicitly. All page assets are local.
-3. Choose home Wi-Fi from the editable network combo box (or choose offline
-   lighting). It lists up to 24 distinct networks, strongest signal first, from
-   the scan before AP startup. Hidden names can be typed manually, including
-   when scanning fails. The list is cached until the next setup boot.
-   Enter coordinates, standard timezone,
-   DST rule, colors/brightness and independent schedule offsets/off limits.
-   Confirm the phone/computer's clock is correct; its UTC epoch sets the DS3231.
+   Stay connected if the device warns that this Wi-Fi has no Internet. Wildcard
+   DNS and HTTP captive-probe redirects may open the setup window automatically;
+   the operating system decides whether to show it. If it does not, enter that
+   address manually in a full browser. HTTPS probes cannot be intercepted.
+   All page assets are local.
+3. Choose a nearby SSID from the dropdown, **Manual** to show a name textbox,
+   or **None** for offline lighting. None hides the password field. The dropdown
+   lists up to 24 distinct 2.4 GHz networks, strongest signal first. **Refresh**
+   beside the SSID label fetches `/networks` without reloading the page and
+   preserves the selection. It reloads the cached pre-AP scan; it does not rescan
+   the radio or disconnect clients. List fetches retry at most three times.
+   The API reports status, count and numeric start error, and Serial logs those
+   diagnostics once per scan without printing SSIDs.
+   The browser fills the current clock and its detected standard UTC offset/DST
+   rule automatically for fixed-offset and US-rule zones. Other seasonal rules
+   open Advanced for review; the firmware still supports `none` and `us` only.
+   **Advanced overrides** exposes coordinates, offset/rule and a UTC clock override.
+   Browser location is requested once with normal accuracy, accepting an already
+   available accurate or cached position rather than forcing a high-accuracy GPS
+   lookup. The request has an eight-second timeout. Browser geolocation requires
+   a secure context and permission: ordinary `http://192.168.4.1` setup normally
+   cannot obtain it, even at coarse accuracy. In that case Advanced opens with
+   coordinates left blank for manual entry; no location is fabricated or sent to
+   an external lookup service. Manually edited coordinates are never overwritten
+   by a late automatic result. Choose colors/brightness and schedule offsets.
    An optional local JSON import preserves per-pixel colors and schedule settings.
 4. Select **Save settings & restart**. For home Wi-Fi, the browser receives an
    acknowledgement before AP mode stops. The lamp attempts station connection
@@ -190,6 +208,33 @@ the RTC. **Setup does not repeat on every power-up.** The AP is absent on a norm
 configured boot. Station failures later leave lighting operating offline, with
 20-second connection attempts separated by 60-second retry waits. Changing a
 previously saved configuration through a normal-operation web UI is still deferred.
+
+### Enter setup using BOOTSEL and a power cycle
+
+With the lamp running, hold the onboard **BOOTSEL** button until the OLED says
+**Setup on next boot** (or Serial acknowledges the armed request). **Keep it held
+while unplugging power.** Then release BOOTSEL and reconnect power normally.
+Releasing it while the firmware is still running cancels the request; let the
+OLED message clear or wait for the Serial cancellation acknowledgement before
+unplugging. Holding BOOTSEL during reconnection enters the ROM UF2 bootloader
+instead of running this firmware.
+
+The core's supported BOOTSEL reader is sampled every 20 ms, with two pressed
+samples required to debounce. ConfigManager records the Boolean request in the
+small `/setup.request` marker beside `config.json`, using a verified temporary
+write and atomic rename. Release removes the marker. This avoids rewriting the
+85-pixel configuration on each press/release. There is at most one set/clear
+operation per hold; filesystem failures are reported. A marker left by loss of
+power is checked at boot, so setup starts even with valid saved settings. The
+saved lighting schedules continue while that setup AP is open. Successful setup
+saving also clears the request. On-device power-cut and release timing still
+require validation.
+
+For UI-only development, `node tools/preview-setup.cjs` serves a loopback-only
+preview with synthetic SSIDs and no settings writes. Its Refresh response adds a
+third synthetic network. `node tests/test_setup_page.cjs` checks the embedded
+browser script using Node built-ins, including location permission failure,
+clock/zone defaults and overrides, SSID refresh, Manual and None behavior.
 
 ## Runtime policy
 

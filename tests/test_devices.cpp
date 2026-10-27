@@ -41,6 +41,16 @@ int main() {
   if(!devices::cpu) assert(fakeCpuReads==0 && sensors.cpuC.mocked);
   if(devices::ambient) {fakeAdc=-1;tick(420000);assert(!sensors.ambientPercent.healthy && sensors.ambientPercent.valid);}
   if(devices::cpu) {fakeCpu=NAN;tick(480000);assert(!sensors.cpuC.healthy && sensors.cpuC.valid);}
+  if(devices::ambient) {
+    SensorManager fast;fast.begin();fakeAdc=1024;fakeMillis=0;fast.tick(0);
+    const float initial=fast.ambientPercent.value;
+    const unsigned reads=fakeAdcReads, cpuReads=fakeCpuReads, conversions=fakeConversions;
+    fakeAdc=3072;fakeMillis=499;fast.tick(499);
+    assert(fakeAdcReads==reads && fast.ambientPercent.value==initial);
+    fakeMillis=500;fast.tick(500);
+    assert(fakeAdcReads==reads+1 && fast.ambientPercent.value>initial && fast.ambientPercent.lastSuccessMs==500);
+    assert(fakeCpuReads==cpuReads && fakeConversions==conversions);
+  }
   fakeWrites=0;fakeShows=0;
   LightingController lights;lights.begin();
   Pixel pixels[PixelCount]{};pixels[0]={255,0,0,128};

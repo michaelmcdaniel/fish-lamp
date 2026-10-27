@@ -30,7 +30,7 @@ struct LittleFSConfig { bool autoFormat=true; void setAutoFormat(bool value) { a
 struct FakeFS {
   std::map<std::string,std::shared_ptr<std::string>> files;
   bool mountOK=true, shortWrite=false, formatOK=true, autoFormat=true;
-  unsigned formats=0, renames=0, failRenameAt=0;
+  unsigned formats=0, renames=0, failRenameAt=0, removes=0;
   void setConfig(LittleFSConfig config) { autoFormat=config.autoFormat; }
   bool begin() { return mountOK; }
   bool format() { ++formats; if(!formatOK)return false; files.clear(); mountOK=true; return true; }
@@ -45,5 +45,6 @@ struct FakeFS {
     auto it=files.find(from); if(it==files.end())return false;
     files[to]=it->second; files.erase(it); return true;
   }
+  bool remove(const char* path) { ++removes;return files.erase(path)!=0; }
 };
 inline FakeFS LittleFS;

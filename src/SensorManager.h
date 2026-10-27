@@ -19,6 +19,6 @@ class SensorManager {
   OneWire waterBus_;
   uint8_t address_[8]{};
 #endif
-  bool first_=true, converting_=false;
-  uint32_t attemptedMs_=0, conversionMs_=0;
+  bool first_=true, ambientFirst_=true, converting_=false;
+  uint32_t attemptedMs_=0, conversionMs_=0, ambientMs_=0;
 };

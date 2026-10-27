@@ -60,6 +60,12 @@ int main() {
   assert(fakeOledLines[6]=="Up 0d 00:00:01");
   for(unsigned i=0;i<72;++i) tick(1100);
   auto before=Wire1.transactions;
+  sensors.ambientPercent.value=60;
+  tick(1599);assert(Wire1.transactions==before && fakeOledLines[3]=="Light: 50.0%");
+  tick(1600);assert(Wire1.transactions==before && fakeOledLines[3]=="Light: 60.0%");
+  for(unsigned i=0;i<9;++i) tick(1600);
+  assert(Wire1.transactions==before+9); // Light reading alone changed at 500ms.
+  before=Wire1.transactions;
   tick(2099);assert(Wire1.transactions==before);
   tick(2100); // Only uptime text changed; no synchronous write.
   assert(Wire1.transactions==before);

@@ -18,8 +18,34 @@ void ConfigManager::begin() {
   LittleFS.setConfig(options);
   if (!LittleFS.begin()) { state = ConfigState::MountFailed; return; }
   mounted_ = true;
+  File request = LittleFS.open("/setup.request", "r");
+  setupRequested_ = bool(request); request.close();
   state = load("/config.json", config) ? ConfigState::Primary :
           load("/config.bak", config) ? ConfigState::Backup : ConfigState::Invalid;
+}
+
+bool ConfigManager::requestSetup() {
+  if(setupRequested_) return true;
+  if(!mounted_) return false; // Never format storage to record a button press.
+  constexpr char marker[]="setup\n";
+  File file=LittleFS.open("/setup.request.tmp","w");
+  bool written=file && file.write(reinterpret_cast<const uint8_t*>(marker),sizeof(marker)-1)==sizeof(marker)-1;
+  file.flush();file.close();
+  if(!written) return false;
+  file=LittleFS.open("/setup.request.tmp","r");
+  if(!file || file.size()!=sizeof(marker)-1) return false;
+  for(unsigned i=0;i<sizeof(marker)-1;++i) if(file.read()!=marker[i]) return false;
+  file.close();
+  if(!LittleFS.rename("/setup.request.tmp","/setup.request")) return false;
+  setupRequested_=true;
+  return true;
+}
+
+bool ConfigManager::clearSetupRequest() {
+  if(!setupRequested_) return true;
+  if(!mounted_ || !LittleFS.remove("/setup.request")) return false;
+  setupRequested_=false;
+  return true;
 }
 
 bool ConfigManager::save(const char* json, size_t length) {
@@ -48,6 +74,8 @@ bool ConfigManager::save(const char* json, size_t length) {
   if (load("/config.json", verified) && !LittleFS.rename("/config.json", "/config.bak")) return false;
   if (!LittleFS.rename("/config.tmp", "/config.json")) return false;
   if (!load("/config.json", verified)) return false;
+  // A forced setup request survives power cycles until setup saves successfully.
+  if(!clearSetupRequest()) return false;
   config = candidate;
   state = ConfigState::Primary;
   return true;

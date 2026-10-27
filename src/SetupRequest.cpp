@@ -17,10 +17,15 @@ void SetupRequest::parseHeaders() {
   char* lineEnd = strstr(headers_, "\r\n");
   if (!lineEnd || lineEnd-headers_ > 127) { error=400; return; }
   *lineEnd = 0;
-  if (!strcmp(headers_,"GET / HTTP/1.1")) route=Route::Page;
-  else if (!strcmp(headers_,"GET /session HTTP/1.1")) route=Route::Session;
-  else if (!strcmp(headers_,"GET /networks HTTP/1.1")) route=Route::Networks;
-  else if (!strcmp(headers_,"POST /configure HTTP/1.1")) route=Route::Configure;
+  const bool get=!strncmp(headers_,"GET /",5);
+  if(get) {
+    char* version=strchr(headers_+4,' ');
+    if(!version || (strcmp(version," HTTP/1.1") && strcmp(version," HTTP/1.0"))) {error=400;return;}
+    *version=0;
+    const char* path=headers_+4;
+    route=!strcmp(path,"/") ? Route::Page : !strcmp(path,"/session") ? Route::Session :
+          !strcmp(path,"/networks") ? Route::Networks : Route::Redirect;
+  } else if (!strcmp(headers_,"POST /configure HTTP/1.1")) route=Route::Configure;
   bool lengthSeen=false, typeSeen=false, tokenSeen=false, hostSeen=false;
   for (char* line = lineEnd+2; *line; line = lineEnd+2) {
     lineEnd = strstr(line,"\r\n");
@@ -35,7 +40,12 @@ void SetupRequest::parseHeaders() {
     while (end>value && (end[-1]==' ' || end[-1]=='\t')) *--end=0;
     if (same(line,"transfer-encoding")) { error=400; return; }
     if (same(line,"host")) {
-      if (hostSeen || (strcmp(value,"192.168.4.1") && strcmp(value,"192.168.4.1:80"))) { error=400; return; }
+      if (hostSeen || !*value) { error=400; return; }
+      if(strcmp(value,"192.168.4.1") && strcmp(value,"192.168.4.1:80")) {
+        if(!get) {error=400;return;}
+        // Never serve tokens or APIs under captive-probe/foreign hostnames.
+        route=Route::Redirect;
+      }
       hostSeen=true;
     } else if (same(line,"origin")) {
       if (strcmp(value,"http://192.168.4.1") && strcmp(value,"http://192.168.4.1:80")) { error=403; return; }

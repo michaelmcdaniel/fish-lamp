@@ -140,6 +140,7 @@ void StatusDisplay::snapshot(uint32_t now, const ConfigManager& settings,
     if(*setupError_) snprintf(lastWarning_,sizeof(lastWarning_),"%.25s",setupError_);
   }
   if(*lastWarning_) snprintf(lines[7],26,"Last: %.19s",lastWarning_);
+  if(settings.setupRequested()) snprintf(lines[7],26,"Setup on next boot");
   render(lines);
   lastMs_=now;
 }
@@ -169,7 +170,7 @@ void StatusDisplay::tick(uint32_t now, const ConfigManager& settings, const Time
     if(write(0x00,&on,1)) {screenOn_=true;lastMs_=now;}
     return;
   }
-  if(uint32_t(now-lastMs_)<1000) return;
+  if(uint32_t(now-lastMs_) < (phase_==Phase::Splash ? 1000u : 500u)) return;
   phase_=Phase::Live;
   snapshot(now,settings,clock,schedule,lights,network,sensors);
 }

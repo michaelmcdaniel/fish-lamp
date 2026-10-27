@@ -1,5 +1,54 @@
 # Verification record
 
+## Setup UX, captive portal, BOOTSEL and ambient display — 2026-10-27
+
+* Replaced the datalist with a native SSID select. Manual reveals an SSID input;
+  None selects offline operation and hides credentials. Refresh beside the label
+  fetches the pre-AP scan snapshot, with bounded retries and explicit errors.
+  `/networks` now includes count and numeric scan-start error; Serial logs those
+  fields once without revealing SSIDs. The bounded callback scan was checked
+  against the installed core's scan initiation/callback interfaces. No physical
+  radio discovery result is claimed.
+* Browser defaults use its current UTC clock and detect fixed-offset or US-rule
+  zones by comparing reported offsets, including transition instants. Advanced
+  overrides expose coordinates, standard offset/rule, and UTC clock override.
+  Unsupported seasonal zones require review rather than receiving an invented
+  rule. Location uses `enableHighAccuracy:false`, accepts an already available
+  position, and has an eight-second timeout. HTTP setup normally cannot obtain
+  browser geolocation, so it leaves coordinates blank and exposes Advanced.
+* Added core DNSServer wildcard resolution (one packet per loop, 512-byte core
+  limit, no forwarding) and captive HTTP redirects to the canonical setup IP.
+  Foreign-host GET requests cannot expose session tokens; configuration POST
+  Host/Origin/token validation remains intact. DNS stops before station testing.
+  Automatic popup is OS-dependent and has not been tested on a real phone.
+* BOOTSEL uses the core's flash-safe reader. A debounced pressed state persists
+  a tiny verified/renamed request marker through ConfigManager. Release while
+  running clears it once; holding through loss of power leaves it for startup
+  and forces setup with the saved lighting configuration retained. Successful
+  setup saving also clears it. OLED/Serial acknowledge the armed request. Tests
+  cover release cancellation, short presses, power-cycle persistence, successful
+  save, partial writes, repeated holds and millis wrap. Actual physical button,
+  filesystem operation and unplug/release timing remain unverified.
+* Ambient sampling and cached OLED snapshots now run on independent **500 ms**
+  timers. Tests verify a new ADC sample/display row at 500 ms, no sample at 499 ms,
+  and no extra water conversions or CPU samples. Dirty rows remain chunked.
+* `./test.ps1` passed **218,155 checks**, real/mock device tests and OLED-enabled/
+  disabled tests. `node tests/test_setup_page.cjs` passed dropdown/control-collision,
+  refresh/retry, None/Manual payloads, normal-accuracy options, clock override,
+  Chicago/Phoenix/Kathmandu/London zone handling and permission/late-location tests.
+* Rendered the actual embedded page in the in-app browser against the loopback
+  preview API with synthetic data. Confirmed two SSIDs initially, a third after
+  Refresh without navigation, hidden credentials for None, and visible SSID input
+  for Manual. The preview disables geolocation permission and never writes settings.
+* Final plain builds passed with Arduino-Pico **6.3.1** and U8g2 **2.36.19**:
+  * Pico WH: **442,020 bytes flash**, **122,932 bytes static RAM**, **139,212 bytes**
+    remaining. UF2: `build/picowh/fish-lamp.ino.uf2`.
+  * Pico 2 W: **434,472 bytes flash**, **125,372 bytes static RAM**, **398,916 bytes**
+    remaining. UF2: `build/pico2w/fish-lamp.ino.uf2`.
+  Existing core Wi-Fi, NeoPixel, OneWire and unused U8g2-driver warnings remain.
+  No firmware upload, real phone association, GPIO measurement or soak test was
+  performed. These results establish software checks, not hardware reliability.
+
 ## Open setup AP at owner's request — 2026-10-27
 
 * Changed FishLamp-Setup to the installed core's open-AP call with no password.

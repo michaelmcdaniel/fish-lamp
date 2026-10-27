@@ -17,7 +17,8 @@ class NetworkScan {
   Network networks_[Capacity]{};
   unsigned count_=0;
   bool collecting_=false, done_=false, failed_=false;
+  int startError_=0;
   uint32_t started_=0;
   // Worst case: every byte of every name needs six JSON escape characters.
-  char json_[Capacity*(32*6+3)+64]{};
+  char json_[Capacity*(32*6+3)+96]{};
 };

@@ -1,5 +1,7 @@
 #include "SetupService.h"
 #include "Devices.h"
+#include "SetupButton.h"
+#include <Bootsel.h>
 #include <LittleFS.h>
 #include <Wire.h>
 #include <Arduino.h>
@@ -20,7 +22,7 @@ static std::string post(const std::string& body,const std::string& token) {
   return "POST /configure HTTP/1.1\r\nHost: 192.168.4.1\r\nContent-Type: application/json\r\nX-Setup-Token: "+token+"\r\nContent-Length: "+std::to_string(body.size())+"\r\n\r\n"+body;
 }
 static void feed(SetupRequest& r,const std::string& data) { for(char ch:data)r.feed(ch); }
-static void resetHardware() { LittleFS=FakeFS{};Wire=FakeWire{};WiFi=FakeWiFi{};rp2040=FakeRp2040{};fakeScan=FakeScan{};fakeIncoming.clear();fakeMillis=0; }
+static void resetHardware() { LittleFS=FakeFS{};Wire=FakeWire{};WiFi=FakeWiFi{};rp2040=FakeRp2040{};fakeScan=FakeScan{};fakeIncoming.clear();fakeMillis=0;BOOTSEL=false; }
 static void scanResult(const std::string& name,int rssi=-60) {
   cyw43_ev_scan_result_t result;
   result.rssi=int16_t(rssi);result.ssid_len=uint8_t(name.size());
@@ -60,7 +62,12 @@ unsigned testSetup(const std::string& fixture) {
       "Transfer-Encoding: chunked\r\n", "Origin: http://evil.invalid\r\n"}) {
     req.reset();feed(req,"POST /configure HTTP/1.1\r\nHost: 192.168.4.1\r\n"+headers+"\r\n"); REQUIRE(req.error!=0);
   }
-  req.reset();feed(req,"GET / HTTP/1.1\r\nHost: evil.invalid\r\n\r\n");REQUIRE(req.error==400);
+  req.reset();feed(req,"GET /session HTTP/1.1\r\nHost: evil.invalid\r\n\r\n");
+  REQUIRE(!req.error && req.route==SetupRequest::Route::Redirect);
+  req.reset();feed(req,"POST /configure HTTP/1.1\r\nHost: evil.invalid\r\n\r\n");REQUIRE(req.error==400);
+  for(const char* probe : {"/generate_204","/hotspot-detect.html","/connecttest.txt","/ncsi.txt","/success.txt"}) {
+    req.reset();feed(req,get(probe));REQUIRE(req.complete && !req.error && req.route==SetupRequest::Route::Redirect);
+  }
   req.reset();feed(req,std::string(2050,'a'));REQUIRE(req.error==431);
   req.reset();feed(req,post(body,std::string(31,'0')));REQUIRE(req.error==403);
   req.reset();feed(req,get("/session").substr(0,10));REQUIRE(!req.complete && !req.error);
@@ -117,6 +124,10 @@ unsigned testSetup(const std::string& fixture) {
 
   resetHardware();ConfigManager c;c.begin();TimeService t;t.begin();SetupService s;s.begin(c);pump(s,c,t);
   REQUIRE(s.state()==SetupService::State::AccessPoint && WiFi.openAP && !WiFi.protectedAP);
+  const auto dnsRequests=fakeDnsRequests;
+  pump(s,c,t);REQUIRE(fakeDnsStarts>0 && fakeDnsRequests==dnsRequests+1);
+  auto portal=exchange(s,c,t,"GET /hotspot-detect.html HTTP/1.1\r\nHost: captive.apple.com\r\n\r\n");
+  REQUIRE(portal.find("302 Found")!=std::string::npos && portal.find("Location: http://192.168.4.1/")!=std::string::npos);
   auto sessionToken=token(s,c,t);
   auto page=exchange(s,c,t,get("/"));REQUIRE(page.find("Set up your Fish Lamp")!=std::string::npos);
   auto denied=exchange(s,c,t,post(body,std::string(32,'f')));REQUIRE(denied.find("403")!=std::string::npos && !c.valid());
@@ -169,5 +180,25 @@ unsigned testSetup(const std::string& fixture) {
   REQUIRE(ap.state()==SetupService::State::APFailed && WiFi.starts==1 && rp2040.reboots==0);
   pump(ap,ac,at,59000);REQUIRE(WiFi.starts==1);
   WiFi.apOK=true;pump(ap,ac,at,1002);REQUIRE(ap.state()==SetupService::State::AccessPoint && WiFi.starts==2);
+
+  resetHardware();ConfigManager configured;configured.begin();REQUIRE(configured.save(networkBody.data(),networkBody.size()));
+  SetupButton button;BOOTSEL=true;button.tick(100,configured);button.tick(119,configured);REQUIRE(!configured.setupRequested());
+  button.tick(120,configured);REQUIRE(configured.setupRequested());
+  const unsigned markerWrites=LittleFS.renames;button.tick(10000,configured);REQUIRE(LittleFS.renames==markerWrites);
+  BOOTSEL=false;button.tick(10020,configured);REQUIRE(!configured.setupRequested());
+  const unsigned markerClears=LittleFS.removes;button.tick(11000,configured);REQUIRE(LittleFS.removes==markerClears);
+  ConfigManager cancelled;cancelled.begin();REQUIRE(cancelled.valid() && !cancelled.setupRequested());
+  SetupService cancelledNetwork;cancelledNetwork.begin(cancelled);REQUIRE(cancelledNetwork.state()==SetupService::State::StationConnecting);
+  // Arm again and simulate loss of power without executing a release tick.
+  BOOTSEL=true;button.tick(11020,configured);BOOTSEL=false;button.tick(11040,configured);REQUIRE(!configured.setupRequested());
+  BOOTSEL=true;button.tick(11060,configured);button.tick(11080,configured);REQUIRE(configured.setupRequested());
+  ConfigManager nextBoot;nextBoot.begin();REQUIRE(nextBoot.valid() && nextBoot.setupRequested());
+  SetupService forced;forced.begin(nextBoot);REQUIRE(forced.state()==SetupService::State::Scanning);
+  REQUIRE(nextBoot.save(networkBody.data(),networkBody.size()));
+  ConfigManager normalBoot;normalBoot.begin();REQUIRE(normalBoot.valid() && !normalBoot.setupRequested());
+  SetupService normal;normal.begin(normalBoot);REQUIRE(normal.state()==SetupService::State::StationConnecting);
+  LittleFS.shortWrite=true;REQUIRE(!normalBoot.requestSetup());ConfigManager partial;partial.begin();REQUIRE(!partial.setupRequested() && partial.valid());
+  LittleFS.shortWrite=false;
+  SetupButton wrap;BOOTSEL=true;wrap.tick(0xfffffff0u,normalBoot);wrap.tick(uint32_t(0xfffffff0u+SetupButton::HoldMs),normalBoot);REQUIRE(normalBoot.setupRequested());
   return assertions;
 }

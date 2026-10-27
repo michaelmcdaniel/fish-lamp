@@ -4,7 +4,7 @@
 // One bounded, non-pipelined HTTP request. Feed only bytes already available.
 class SetupRequest {
  public:
-  enum class Route { Page, Session, Networks, Configure, NotFound };
+  enum class Route { Page, Session, Networks, Configure, Redirect, NotFound };
   void reset();
   void feed(char ch);
   bool complete = false;

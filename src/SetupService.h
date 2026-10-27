@@ -4,6 +4,7 @@
 #include "SetupRequest.h"
 #include "NetworkScan.h"
 #include <WiFi.h>
+#include <DNSServer.h>
 
 class SetupService {
  public:
@@ -25,6 +26,8 @@ class SetupService {
   void fail(const char* message);
   State state_ = State::Disabled;
   WiFiServer server_{80};
+  DNSServer dns_;
+  bool dnsRunning_=false;
   WiFiClient client_;
   SetupRequest request_;
   Config candidate_;
@@ -32,7 +35,7 @@ class SetupService {
   int64_t candidateUtc_ = 0;
   uint32_t stateMs_ = 0, acceptedMs_ = 0, progressMs_ = 0, submittedMs_ = 0;
   bool clientActive_ = false, responding_ = false, testAfterResponse_ = false;
-  char token_[33]{}, session_[256]{}, header_[256]{};
+  char token_[33]{}, session_[256]{}, header_[320]{};
   const char* response_ = nullptr;
   const char* lastError_ = "";
   bool signalValid_ = false;

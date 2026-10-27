@@ -1,4 +1,5 @@
 #include "NetworkScan.h"
+#include "MockDebug.h"
 #include <algorithm>
 #include <cstring>
 #include <cstdio>
@@ -41,7 +42,8 @@ void NetworkScan::begin(uint32_t now) {
   cyw43_arch_lwip_begin();
   count_=0; done_=false; collecting_=true; started_=now;
   cyw43_wifi_scan_options_t options{};
-  failed_=cyw43_wifi_scan(&cyw43_state,&options,this,result)!=0;
+  startError_=cyw43_wifi_scan(&cyw43_state,&options,this,result);
+  failed_=startError_!=0;
   cyw43_arch_lwip_end();
 }
 bool NetworkScan::tick(uint32_t now) {
@@ -54,7 +56,9 @@ bool NetworkScan::tick(uint32_t now) {
   cyw43_arch_lwip_end();
   if(!finished) return false;
   cyw43_arch_disable_sta_mode();
-  serialize(failed_ ? "failed" : active && timeout ? "timeout" : "ready");
+  const char* status=failed_ ? "failed" : active && timeout ? "timeout" : "ready";
+  serialize(status);
+  mockdebug::log("WiFi scan: %s, count=%u, error=%d\r\n",status,count_,startError_);
   done_=true;
   return true;
 }
@@ -62,7 +66,7 @@ void NetworkScan::serialize(const char* status) {
   std::sort(networks_,networks_+count_,[](const Network& a,const Network& b){
     return a.rssi!=b.rssi ? a.rssi>b.rssi : strcmp(a.ssid,b.ssid)<0;
   });
-  size_t used=size_t(snprintf(json_,sizeof(json_),"{\"status\":\"%s\",\"networks\":[",status));
+  size_t used=size_t(snprintf(json_,sizeof(json_),"{\"status\":\"%s\",\"count\":%u,\"error\":%d,\"networks\":[",status,count_,startError_));
   constexpr char hex[]="0123456789abcdef";
   for(unsigned i=0;i<count_;++i) {
     if(i)json_[used++]=',';

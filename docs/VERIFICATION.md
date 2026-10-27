@@ -347,6 +347,15 @@ and observed output transitions. Keep credentials and private settings out of lo
 
 ## Connected dashboard checks
 
+2026-10-27 desktop results: `./test.ps1` passed 218,306 checks plus real/mock
+device adapters and OLED enabled/disabled suites. Both
+`node tests/test_dashboard_page.cjs` and `node tests/test_setup_page.cjs` passed.
+Final `./build-pico2w.ps1` passed with Arduino-Pico 6.3.1 and the preserved
+Pico 2 W flash selection: 957,296 bytes program storage (24%), 158,532 bytes
+static RAM (30%). Dependency warnings remain in WiFi, Adafruit NeoPixel,
+OneWire and U8g2. No upload, physical browser test or hardware measurements were
+performed for this slice.
+
 Host coverage: station connect/reconnect, `/` and both status URLs, 85 day/night
 arrays, JSON escaping and password exclusion, stale/invalid sensor values,
 invalid clock, unsupported methods/routes, oversized headers, request bodies,

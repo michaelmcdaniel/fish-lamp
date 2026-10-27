@@ -44,4 +44,4 @@ if ($urls -notcontains $index) {
 Invoke-Arduino core update-index
 Invoke-Arduino core install 'rp2040:rp2040@6.0.0'
 Invoke-Arduino lib install 'ArduinoJson@7.4.3' 'Adafruit NeoPixel@1.15.2' 'OneWire@2.3.8'
-Write-Host 'Build tools ready. Run ./build.ps1.'
+Write-Host 'Build tools ready. Run ./build-pico2w.ps1 or ./build-picowh.ps1.'

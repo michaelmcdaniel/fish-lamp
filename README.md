@@ -1,6 +1,6 @@
 # Fish Lamp — offline lighting and first-boot setup
 
-This is the first functional C++ slice for Pico 2 W, not the completed appliance.
+This is the first functional C++ slice for Pico 2 W and Pico WH, not the completed appliance.
 It implements safe outputs, DS3231-backed offline time, solar scheduling, validated
 configuration storage, a protected Wi-Fi setup page, and USB Serial controls. Hardware reliability has **not**
 been established. See [feature parity](docs/FEATURE-PARITY.md) and
@@ -11,7 +11,11 @@ been established. See [feature parity](docs/FEATURE-PARITY.md) and
 Verified dependencies: Arduino-Pico **6.0.0**, ArduinoJson **7.4.3**, and
 Adafruit NeoPixel **1.15.2**, and OneWire **2.3.8**. Arduino CLI can install missing libraries with
 `arduino-cli lib install "ArduinoJson@7.4.3" "Adafruit NeoPixel@1.15.2" "OneWire@2.3.8"`.
-The board/flash selection remains `rp2040:rp2040:rpipico2w:flash=4194304_262144`.
+`build-pico2w.ps1` targets Pico 2 W: `rp2040:rp2040:rpipico2w:flash=4194304_262144`.
+`build-picowh.ps1` targets Pico WH using `rp2040:rp2040:rpipicow:flash=2097152_262144`:
+2 MB flash with 256 KiB reserved for LittleFS. Its upload file is
+`build/picowh/fish-lamp.ino.uf2`; the Pico 2 W output is
+`build/pico2w/fish-lamp.ino.uf2`.
 
 On a new Windows x64 computer, run `./setup-tools.ps1` once with Internet access.
 It installs Arduino CLI **1.5.1** if missing (verifying the official archive's
@@ -30,7 +34,8 @@ them for subsequent builds. The generator never overwrites existing access files
 
 ```powershell
 ./setup-tools.ps1 # first-time toolchain installation
-./build.ps1
+./build-pico2w.ps1
+./build-picowh.ps1 # Pico WH instead of Pico 2 W
 ./test.ps1
 ./tests/test-migration.ps1
 ```
@@ -39,7 +44,7 @@ Where Windows blocks unsigned scripts, use a process-only override:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File ./setup-tools.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File ./build.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File ./build-pico2w.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File ./test.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File ./tests/test-migration.ps1
 ```

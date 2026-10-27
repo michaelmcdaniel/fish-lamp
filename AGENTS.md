@@ -10,6 +10,12 @@ The existing MicroPython application is the **behavioral reference**, not an arc
 
 ## Repository and build — preserve these
 
+**Default build target: Pico WH only.** Run `./build-picowh.ps1` unless the user
+explicitly requests another target. Do not also build Pico 2 W or other boards
+for routine validation. This rule takes precedence over the historical Pico 2 W
+target and `build.ps1` references below. Preserve the existing build scripts and
+their board/flash selections.
+
 Reference archive layout:
 
 ```text
@@ -175,7 +181,7 @@ A component can be a small module/struct rather than a class when simpler. Separ
 2. **Create a feature-parity inventory** against `python/main.py` (hardware, schedules, HTTP, settings, sensors, time, Wi-Fi, UI, reporting). Mark completed / deferred / known legacy bug.
 3. **Work in thin vertical slices:** first compile/safe boot and GPIO, then RTC/time, deterministic schedule, LED/grow-light outputs, persisted settings, sensors, networking/API, telemetry, and provisioning. Modify only the files needed for one slice.
 4. **Complete real code, not scaffolds.** No empty functions masquerading as implementation, declarations with missing definitions, always-constant state getters, invented APIs, or silent placeholders. If intentionally incomplete, mark it explicitly and keep the firmware functioning.
-5. **Compile after every slice** with `./build.ps1` from PowerShell in the repository root. Fix compiler errors before continuing. If CLI/toolchain is unavailable, say so; do not assert success.
+5. **Compile after every firmware slice** with `./build-picowh.ps1` from PowerShell in the repository root. Build only Pico WH unless the user explicitly requests another target. Documentation-only changes do not require a firmware build. Fix compiler errors before continuing. If CLI/toolchain is unavailable, say so; do not assert success.
 6. **Unit-test critical pure logic** where practical: day/night boundaries, manual override expiry, DST transition, leap day, midnight, invalid RTC, no Wi-Fi, failed DS18B20, partial/corrupt config, and sunrise/sunset offsets.
 7. **Do not overwrite original MicroPython** or real user settings. Make reversible, reviewable Git commits per complete slice. Exclude binary build outputs and secrets.
 8. **Keep responses concise.** Report changed files, new behavior, actual compile/test result, remaining risks, and next small task. Do not dump complete source files into chat unless requested; edit files in the workspace.

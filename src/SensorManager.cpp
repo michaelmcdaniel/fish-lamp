@@ -13,7 +13,7 @@ void mock(SensorReading& reading,float value,uint32_t now) {
 }
 void SensorManager::begin() {
 #if FISH_LAMP_WATER
-  waterBus_.begin(26);
+  waterBus_.begin(devices::waterPin);
 #endif
   if(devices::ambient) analogReadResolution(12);
   if(!devices::water) mockdebug::log("mock water=%.1f F\r\n",double(devices::mockWaterF));
@@ -61,7 +61,7 @@ void SensorManager::tick(uint32_t now) {
   } else waterF.healthy=false;
 #endif
   if(devices::ambient) {
-    int raw=analogRead(27);
+    int raw=analogRead(devices::ambientPin);
     sample(ambientPercent,float(raw)*100.0f/4095.0f,raw>=0 && raw<=4095,now);
   } else mock(ambientPercent,devices::mockAmbientPercent,now);
   if(devices::cpu) {

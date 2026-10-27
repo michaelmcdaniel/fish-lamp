@@ -1,4 +1,5 @@
 #pragma once
+#include <Arduino.h>
 #include <stdint.h>
 
 // Set to 1 for a Pico with no external gadgets attached. Rebuild and upload.
@@ -31,6 +32,16 @@
 #define FISH_LAMP_WIFI 1
 #endif
 namespace devices {
+// GPIO numbers, except the board-defined status LED and internal ADC channel.
+constexpr uint8_t stripPin = 7;
+constexpr uint8_t growPin = 8; // HIGH = on, LOW = off.
+constexpr uint8_t waterPin = 26;
+constexpr uint8_t ambientPin = 27;
+constexpr uint8_t rtcSdaPin = 16;
+constexpr uint8_t rtcSclPin = 17;
+constexpr auto statusLedPin = LED_BUILTIN; // Pico 2 W Wi-Fi-chip LED.
+constexpr uint8_t cpuTempAdcChannel = 4; // Internal ADC, NOT GPIO 4; use analogReadTemp().
+// Onboard Wi-Fi uses the core's board wiring; no application GPIO declaration.
 static_assert((FISH_LAMP_BENCH==0 || FISH_LAMP_BENCH==1) &&
               (FISH_LAMP_STRIP==0 || FISH_LAMP_STRIP==1) &&
               (FISH_LAMP_GROW==0 || FISH_LAMP_GROW==1) &&

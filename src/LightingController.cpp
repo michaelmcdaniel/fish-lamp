@@ -2,7 +2,7 @@
 #include "MockDebug.h"
 
 void LightingController::begin() {
-  if(devices::grow) { digitalWrite(8, LOW); pinMode(8, OUTPUT); }
+  if(devices::grow) { digitalWrite(devices::growPin, LOW); pinMode(devices::growPin, OUTPUT); }
   else mockdebug::log("mock grow=0\r\n");
 #if FISH_LAMP_STRIP
   ready_ = strip_.begin();
@@ -19,7 +19,7 @@ void LightingController::begin() {
 
 void LightingController::apply(const Pixel* pixels, bool growOn) {
   if (growOn_ != growOn) {
-    if(devices::grow) digitalWrite(8, growOn ? HIGH : LOW);
+    if(devices::grow) digitalWrite(devices::growPin, growOn ? HIGH : LOW);
     else mockdebug::log("mock grow=%d\r\n",growOn);
     growOn_ = growOn;
     lastAppliedMs = millis();

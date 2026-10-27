@@ -13,7 +13,7 @@ class LightingController {
   bool ready() const { return ready_; }
  private:
 #if FISH_LAMP_STRIP
-  Adafruit_NeoPixel strip_{PixelCount, 7, NEO_GRB + NEO_KHZ800};
+  Adafruit_NeoPixel strip_{PixelCount, devices::stripPin, NEO_GRB + NEO_KHZ800};
 #endif
   uint32_t applied_[PixelCount]{};
   bool ready_ = false;

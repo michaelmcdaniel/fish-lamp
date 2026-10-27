@@ -12,8 +12,8 @@ void TimeService::begin() {
     mockdebug::log("mock RTC: boot UTC=%lld\r\n",static_cast<long long>(seconds_));
     return;
   }
-  Wire.setSDA(16);
-  Wire.setSCL(17);
+  Wire.setSDA(devices::rtcSdaPin);
+  Wire.setSCL(devices::rtcSclPin);
   Wire.begin();
   Wire.setClock(100000);
   Wire.setTimeout(5, true);

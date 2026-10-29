@@ -1,0 +1,52 @@
+#line 1 "C:\\Users\\mmcda\\OneDrive\\Code\\pico\\fish-lamp\\fish-lamp.ino"
+#include <Arduino.h>
+
+#include "src/LightingController.h"
+#include "src/TimeService.h"
+#include "src/ConfigManager.h"
+#include "src/ScheduleController.h"
+#include "src/Diagnostics.h"
+#include "src/SetupService.h"
+#include "src/SensorManager.h"
+#include "src/StatusLed.h"
+
+LightingController lighting;
+TimeService clockService;
+ConfigManager settings;
+ScheduleController schedule;
+Diagnostics diagnostics;
+SetupService networking;
+SensorManager sensors;
+StatusLed statusLed;
+
+void setup() {
+  lighting.begin();
+  Serial.begin(115200);
+  rp2040.wdt_begin(8000);
+  settings.begin();
+  clockService.begin();
+  sensors.begin();
+  statusLed.begin();
+  diagnostics.begin();
+  networking.begin(settings);
+}
+
+void loop() {
+  const uint32_t started = micros();
+  const uint32_t now = millis();
+  clockService.tick(now);
+  sensors.tick(now);
+  statusLed.apply(settings.valid() && clockService.valid());
+  if (settings.valid() && clockService.valid() && !networking.restarting()) {
+    schedule.tick(clockService.utc(), now, settings.config);
+    lighting.apply(schedule.forceOff ? nullptr : schedule.dayOn ?
+                   settings.config.lights : settings.config.nightlights, schedule.growOn);
+  } else {
+    lighting.apply(nullptr, false);
+  }
+  // Only essential control progress feeds the hardware watchdog.
+  rp2040.wdt_reset();
+  diagnostics.tick(now, micros() - started, settings, clockService, schedule, lighting, int(networking.state()), sensors);
+  networking.tick(millis(), settings, clockService);
+}
+
